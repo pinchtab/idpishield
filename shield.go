@@ -180,6 +180,26 @@ func (s *Shield) ScanContext(ctx context.Context, text string) RiskResult {
 	return s.AssessContext(ctx, text, "")
 }
 
+// AssessWithMode selects a Shield instance by mode and runs Assess.
+// If mode is empty, defaultMode is used.
+func AssessWithMode(shields map[Mode]*Shield, defaultMode Mode, text, mode string) (RiskResult, error) {
+	selected := defaultMode
+	if strings.TrimSpace(mode) != "" {
+		parsed, err := ParseModeStrict(mode)
+		if err != nil {
+			return RiskResult{}, err
+		}
+		selected = parsed
+	}
+
+	shield, ok := shields[selected]
+	if !ok || shield == nil {
+		return RiskResult{}, fmt.Errorf("shield for mode %q is not configured", selected)
+	}
+
+	return shield.Assess(text, ""), nil
+}
+
 // escapeContentTags neutralizes XML-like tags in content that could interfere
 // with the trust boundary wrapping. Specifically escapes the boundary tags
 // to prevent an attacker from injecting a closing </trusted_system_context>
