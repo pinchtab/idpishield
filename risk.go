@@ -1,6 +1,9 @@
 package idpishield
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Mode configures analysis depth.
 type Mode string
@@ -36,6 +39,26 @@ func ParseMode(s string) Mode {
 		return ModeDeep
 	default:
 		return ModeBalanced
+	}
+}
+
+// ParseModeStrict converts a string to a Mode value and returns an error for unsupported values.
+// Empty input defaults to ModeBalanced.
+func ParseModeStrict(s string) (Mode, error) {
+	raw := strings.ToLower(strings.TrimSpace(s))
+	if raw == "" {
+		return ModeBalanced, nil
+	}
+
+	switch raw {
+	case "fast":
+		return ModeFast, nil
+	case "balanced":
+		return ModeBalanced, nil
+	case "deep":
+		return ModeDeep, nil
+	default:
+		return "", fmt.Errorf("invalid mode %q: expected fast, balanced, or deep", s)
 	}
 }
 
