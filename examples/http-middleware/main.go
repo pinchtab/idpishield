@@ -147,7 +147,7 @@ func (s *server) idpiMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Run idpi-shield scan
 		s.totalRequests.Add(1)
-		result := s.client.Scan(req.Message)
+		result := s.client.Assess(req.Message, req.URL)
 
 		// Log every request
 		status := "CLEAN   "

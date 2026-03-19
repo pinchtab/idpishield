@@ -102,7 +102,7 @@ func processURL(client *idpi.Shield, url string) {
 	// Step 3: Scan with idpi-shield
 	fmt.Printf("%s[Step 3]%s Scanning with idpi-shield...\n", cyan+bold, reset)
 	start := time.Now()
-	result := client.Scan(content)
+	result := client.Assess(content, url)
 	elapsed := time.Since(start)
 	fmt.Printf("  Analysis completed in %v\n", elapsed.Round(time.Microsecond))
 	fmt.Println()
@@ -252,7 +252,7 @@ Here are my top 5 tips for getting more done each day:
 		fmt.Println()
 
 		start := time.Now()
-		result := client.Scan(s.content)
+		result := client.Assess(s.content, s.url)
 		elapsed := time.Since(start)
 
 		if result.Blocked {

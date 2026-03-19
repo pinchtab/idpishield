@@ -201,8 +201,8 @@ if result.Blocked {
     return fmt.Errorf("domain blocked: %s", result.Reason)
 }
 
-// Scan page content before passing to AI
-result = client.Scan(pageText)
+// Assess page content before passing to AI
+result = client.Assess(pageText, pageURL)
 fmt.Printf("Risk score: %d/100 (%s)\n", result.Score, result.Level)
 if result.Blocked {
     return fmt.Errorf("content blocked: %s", result.Reason)
@@ -409,15 +409,15 @@ Start with the **Go client library** because:
 ### Immediate first files to create:
 
 ```
-clients/go/
-├── go.mod                  (module github.com/idpi-shield/idpi-shield-go)
-├── idpishield.go           (Client struct, New(), Scan(), CheckDomain(), Wrap())
+idpi-shield/
+├── go.mod                  (module github.com/pinchtab/idpi-shield)
+├── shield.go               (Shield struct, New(), Assess(), CheckDomain(), Wrap())
 ├── risk.go                 (RiskResult type, score thresholds, level mapping)
 ├── scanner.go              (pattern matching pipeline)
 ├── normalizer.go           (Unicode NFKC + zero-width strip + homoglyph map)
 ├── domain.go               (allowlist check, wildcard matching fix)
 ├── patterns/builtin.go     (75+ patterns with categories)
-└── idpishield_test.go      (conformance tests using spec/test_vectors.json)
+└── shield_test.go          (conformance and integration tests)
 ```
 
 ---
