@@ -28,6 +28,7 @@ func newScanner() *scanner {
 }
 
 // scan runs all patterns against the input text and returns matches.
+// It handles both raw text and encoded variants (BASE64, HEX, ROT13, etc.)
 func (s *scanner) scan(text string) []match {
 	if len(text) == 0 {
 		return nil
@@ -36,23 +37,33 @@ func (s *scanner) scan(text string) []match {
 	var matches []match
 	seen := make(map[string]bool) // deduplicate by pattern ID
 
-	for i := range s.pats {
-		p := &s.pats[i]
-		loc := p.Regex.FindStringIndex(text)
-		if loc == nil {
+	// Get all variants (original + decoded)
+	variants := getAllDecodedVariants(text)
+
+	// Scan each variant for patterns
+	for _, variant := range variants {
+		if len(variant) == 0 {
 			continue
 		}
-		if seen[p.ID] {
-			continue
+
+		for i := range s.pats {
+			p := &s.pats[i]
+			loc := p.Regex.FindStringIndex(variant)
+			if loc == nil {
+				continue
+			}
+			if seen[p.ID] {
+				continue // Already found this pattern in another variant
+			}
+			seen[p.ID] = true
+			matches = append(matches, match{
+				PatternID: p.ID,
+				Category:  p.Category,
+				Severity:  p.Severity,
+				Desc:      p.Desc,
+				Matched:   variant[loc[0]:loc[1]],
+			})
 		}
-		seen[p.ID] = true
-		matches = append(matches, match{
-			PatternID: p.ID,
-			Category:  p.Category,
-			Severity:  p.Severity,
-			Desc:      p.Desc,
-			Matched:   text[loc[0]:loc[1]],
-		})
 	}
 	return matches
 }
@@ -64,6 +75,117 @@ var severityWeight = [6]int{0, 10, 15, 25, 35, 45}
 type categoryInfo struct {
 	maxSeverity int
 	matchCount  int
+}
+
+// applyContextPenalties reduces scores when patterns appear in legitimate contexts.
+// This combats false positives from documentation, code examples, and comments.
+func applyContextPenalties(score int, text string, matches []match) int {
+	if len(text) == 0 {
+		return score
+	}
+
+	lowerText := strings.ToLower(text)
+	penalty := 0
+
+	// Check for legitimate documentation/example contexts
+	docMarkers := []string{
+		"example:",
+		"example code:",
+		"here's an example",
+		"documentation",
+		"api docs",
+		"api documentation",
+		"how to",
+		"tutorial",
+		"guide",
+		"readme",
+		"note:",
+		"warning:",
+		"deprecated:",
+	}
+
+	for _, marker := range docMarkers {
+		if strings.Contains(lowerText, marker) {
+			penalty += 15 // Reduce by 15 points if in docs
+			break
+		}
+	}
+
+	// Check for code/comment contexts
+	codeMarkers := []string{
+		"```",
+		"```python",
+		"```go",
+		"```javascript",
+		"```java",
+		"<code>",
+		"// ",      // Code comment
+		"/* ",      // Block comment
+		"<!--",     // HTML comment
+		"#",        // Shell/Python comment
+		"--",       // SQL comment
+	}
+
+	for _, marker := range codeMarkers {
+		if strings.Contains(text, marker) {
+			// Check if the matched pattern is inside a code block
+			matchedIndex := strings.Index(lowerText, matches[0].Matched)
+			if matchedIndex > 0 {
+				// Look backward for code markers
+				contextSnippet := text[maxInt(0, matchedIndex-100):minInt(len(text), matchedIndex+100)]
+				if strings.Contains(contextSnippet, marker) {
+					penalty += 20 // Reduce by 20 points if in code
+					break
+				}
+			}
+		}
+	}
+
+	// Check for legitimate use-case markers
+	legitimateMarkers := []string{
+		"legitimate use case",
+		"normal behavior",
+		"expected behavior",
+		"allowed",
+		"valid",
+		"authorized",
+	}
+
+	for _, marker := range legitimateMarkers {
+		if strings.Contains(lowerText, marker) {
+			penalty += 10 // Reduce by 10 points
+			break
+		}
+	}
+
+	// Check if the entire text looks like HTML attributes (e.g., aria-hidden)
+	if strings.Contains(text, "aria-") || strings.Contains(text, "data-") {
+		// XML/HTML attribute contexts are usually not attack vectors
+		penalty += 5
+	}
+
+	// Apply penalty but don't go below 0
+	finalScore := score - penalty
+	if finalScore < 0 {
+		finalScore = 0
+	}
+
+	return finalScore
+}
+
+// Helper functions for context checking
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // computeScore calculates the final risk score from pattern matches.
@@ -134,12 +256,17 @@ func computeScore(matches []match) int {
 }
 
 // buildResult constructs a RiskResult from scan matches.
-func buildResult(matches []match, _ string, strict bool) RiskResult {
+// It applies context-aware scoring to reduce false positives.
+func buildResult(matches []match, text string, strict bool) RiskResult {
 	if len(matches) == 0 {
 		return safeResult("local", "")
 	}
 
 	score := computeScore(matches)
+	
+	// Apply context-aware scoring to reduce false positives
+	score = applyContextPenalties(score, text, matches)
+	
 	level := ScoreToLevel(score)
 	blocked := shouldBlock(score, strict)
 
