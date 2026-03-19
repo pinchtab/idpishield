@@ -14,8 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pinchtab/pinchtab/internal/config"
-	"github.com/pinchtab/pinchtab/internal/idpi"
+	idpishield "github.com/pinchtab/idpi-shield"
 )
 
 // Sample represents a single labeled content sample in the benchmark dataset.
@@ -97,7 +96,7 @@ type Metrics struct {
 type Report struct {
 	Timestamp   string                      `json:"timestamp"`
 	Duration    string                      `json:"duration"`
-	Config      config.IDPIConfig           `json:"config"`
+	Config      idpishield.Config           `json:"config"`
 	Metrics     Metrics                     `json:"metrics"`
 	FlatResults []FlatResult                `json:"results"`
 	ByCategory  map[string]*CategoryMetrics `json:"by_category"`
@@ -179,7 +178,7 @@ func LoadDataset(datasetDir string) ([]Sample, error) {
 //  6. Return a Report containing both internal Results and flattened FlatResults
 //
 // The pipeline is deterministic: identical input always produces identical output.
-func RunBenchmark(datasetDir string, cfg config.IDPIConfig) (*Report, error) {
+func RunBenchmark(datasetDir string, cfg idpishield.Config) (*Report, error) {
 	start := time.Now()
 
 	samples, err := LoadDataset(datasetDir)
@@ -191,11 +190,13 @@ func RunBenchmark(datasetDir string, cfg config.IDPIConfig) (*Report, error) {
 		return nil, fmt.Errorf("no samples found in %s", datasetDir)
 	}
 
+	shield := idpishield.New(cfg)
+
 	results := make([]Result, 0, len(samples))
 	byCategory := make(map[string]*CategoryMetrics)
 
 	for _, sample := range samples {
-		result := evaluateSample(sample, cfg)
+		result := evaluateSample(sample, shield)
 		results = append(results, result)
 
 		cat, ok := byCategory[sample.Category]
@@ -241,11 +242,15 @@ func RunBenchmark(datasetDir string, cfg config.IDPIConfig) (*Report, error) {
 // evaluateSample runs one sample through the IDPI Shield and classifies
 // the outcome into TP, TN, FP, or FN by comparing the Shield's detection
 // result against the sample's ground-truth label.
-func evaluateSample(sample Sample, cfg config.IDPIConfig) Result {
-	check := idpi.ScanContent(sample.Content, cfg)
+func evaluateSample(sample Sample, shield *idpishield.Shield) Result {
+	check := shield.Assess(sample.Content, "")
 
 	isMalicious := sample.Label == "malicious"
-	detected := check.Threat
+	detected := len(check.Patterns) > 0
+	matchedPattern := ""
+	if len(check.Patterns) > 0 {
+		matchedPattern = check.Patterns[0]
+	}
 
 	var classification string
 	switch {
@@ -261,10 +266,10 @@ func evaluateSample(sample Sample, cfg config.IDPIConfig) Result {
 
 	return Result{
 		Sample:         sample,
-		ShieldDetected: check.Threat,
+		ShieldDetected: detected,
 		ShieldBlocked:  check.Blocked,
 		ShieldReason:   check.Reason,
-		ShieldPattern:  check.Pattern,
+		ShieldPattern:  matchedPattern,
 		Correct:        (isMalicious == detected),
 		Classification: classification,
 	}

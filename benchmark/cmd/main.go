@@ -26,8 +26,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pinchtab/pinchtab/benchmark"
-	"github.com/pinchtab/pinchtab/internal/config"
+	"github.com/pinchtab/idpi-shield/benchmark"
+	idpishield "github.com/pinchtab/idpi-shield"
 )
 
 func main() {
@@ -38,18 +38,18 @@ func main() {
 	jsonOnly := flag.Bool("json", false, "output JSON only (no text report)")
 	flag.Parse()
 
-	cfg := config.IDPIConfig{
-		Enabled:     true,
-		StrictMode:  *strict,
-		ScanContent: true,
-		WrapContent: false,
+	cfg := idpishield.Config{
+		Mode:       idpishield.ModeBalanced,
+		StrictMode: *strict,
 	}
+
+	customPatterns := make([]string, 0)
 
 	if *customPat != "" {
 		for _, p := range strings.Split(*customPat, ",") {
 			p = strings.TrimSpace(p)
 			if p != "" {
-				cfg.CustomPatterns = append(cfg.CustomPatterns, p)
+				customPatterns = append(customPatterns, p)
 			}
 		}
 	}
@@ -59,8 +59,8 @@ func main() {
 	fmt.Printf("Dataset : %s\n", *datasetDir)
 	fmt.Printf("Output  : %s\n", *outputDir)
 	fmt.Printf("Strict  : %v\n", *strict)
-	if len(cfg.CustomPatterns) > 0 {
-		fmt.Printf("Custom  : %v\n", cfg.CustomPatterns)
+	if len(customPatterns) > 0 {
+		fmt.Printf("Custom  : %v (currently not applied by root Config)\n", customPatterns)
 	}
 	fmt.Println()
 

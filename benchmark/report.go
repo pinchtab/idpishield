@@ -1,6 +1,3 @@
-//go:build benchmark
-// +build benchmark
-
 package benchmark
 
 import (
@@ -29,12 +26,13 @@ func GenerateReport(report *Report) string {
 
 	// Shield Config
 	sb.WriteString("─── Shield Configuration ───────────────────────────────────────\n")
-	sb.WriteString(fmt.Sprintf("  Enabled      : %v\n", report.Config.Enabled))
+	sb.WriteString(fmt.Sprintf("  Mode         : %s\n", report.Config.Mode))
 	sb.WriteString(fmt.Sprintf("  StrictMode   : %v\n", report.Config.StrictMode))
-	sb.WriteString(fmt.Sprintf("  ScanContent  : %v\n", report.Config.ScanContent))
-	sb.WriteString(fmt.Sprintf("  WrapContent  : %v\n", report.Config.WrapContent))
-	if len(report.Config.CustomPatterns) > 0 {
-		sb.WriteString(fmt.Sprintf("  CustomPat.   : %d patterns\n", len(report.Config.CustomPatterns)))
+	if len(report.Config.AllowedDomains) > 0 {
+		sb.WriteString(fmt.Sprintf("  Domains      : %d allowlisted\n", len(report.Config.AllowedDomains)))
+	}
+	if report.Config.ServiceURL != "" {
+		sb.WriteString(fmt.Sprintf("  ServiceURL   : %s\n", report.Config.ServiceURL))
 	}
 	sb.WriteString("\n")
 
