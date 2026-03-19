@@ -302,4 +302,80 @@ var allPatterns = []Pattern{
 		CategoryRoleHijack, 3, LangJA, "あなたは今新しい"),
 	p("ja-ic-001", `新しい(指示|命令|ルール)\s*[：:]`,
 		CategoryIndirectCommand, 3, LangJA, "新しい指示"),
+
+	// =====================================================================
+	// ENGLISH — ENCODING DETECTION (found after BASE64/HEX/ROT13 decode)
+	// =====================================================================
+	// These patterns detect attack keywords that appear after decoding
+	// The scanner.go will decode BASE64, HEX, ROT13 etc. and then scan these patterns
+	p("en-io-enc-001", `\bignore\s+(all|every|each)\s+(instructions?|rules?|directives?|prior|previous|prior\s+instructions?)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Decoded: ignore all instructions"),
+	p("en-io-enc-002", `\b(bypass|circumvent|override|disregard)\s+(security|safety|filter|restrictions?|limitations?)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Decoded: bypass security"),
+	p("en-io-enc-003", `\b(forget|discard|abandon)\s+(your|the\s+)?(instructions?|rules?|guidelines?|training|initialization)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Decoded: forget instructions"),
+	p("en-io-enc-004", `\b(start|begin|commence)\s+(new|fresh|different|malicious)\s+(instructions?|tasks?|objectives?)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Decoded: start new task"),
+	p("en-io-enc-005", `\b(act|behave|function|operate)\s+(as|like|without)\s+.{1,30}(restrictions?|filter|safety|rules?)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Decoded: act without restrictions"),
+
+	p("en-ex-enc-001", `\b(extract|obtain|retrieve|steal|exfiltrate)\s+(and)?\s*(send|post|upload|transmit|forward|leak|share)\b`,
+		CategoryExfiltration, 5, LangEN, "Decoded: extract and send"),
+	p("en-ex-enc-002", `\b(send|forward|post|upload|transmit|share)\s+(all|every)\s+(data|information|credentials?|passwords?|keys?|tokens?)\b`,
+		CategoryExfiltration, 5, LangEN, "Decoded: send all data"),
+	p("en-ex-enc-003", `\b(encode|encrypt|hash)?\s*(and)?\s*(send|post|upload|exfiltrate)\s+.{0,30}(api[\s-]?key|password|token|credential|secret)\b`,
+		CategoryExfiltration, 5, LangEN, "Decoded: send credentials"),
+	p("en-ex-enc-004", `\b(http\s+request|curl|wget|fetch).{0,30}(send|post|transmit|data)\b`,
+		CategoryExfiltration, 4, LangEN, "Decoded: HTTP data send"),
+
+	p("en-rh-enc-001", `\byou\s+(are|become|start|switch\s+to|assume|take)\s+(a|an|the)\s+(role|persona|identity|character)\b`,
+		CategoryRoleHijack, 4, LangEN, "Decoded: assume role"),
+	p("en-rh-enc-002", `\b(pretend|roleplay|simulate|imagine|assume)\s+(you\s+are|that\s+you\s+are|to\s+be)\b`,
+		CategoryRoleHijack, 4, LangEN, "Decoded: pretend to be"),
+
+	p("en-jb-enc-001", `\b(remove|disable|bypass|circumvent)\s+(all\s+)?(safeguard|safety|filter|security|restriction|limitation|guardrail|boundary)\b`,
+		CategoryJailbreak, 5, LangEN, "Decoded: remove safeguards"),
+	p("en-jb-enc-002", `\b(no|without|zero)\s+(safety|security|ethical|moral|restriction|limitation|filter|guardrail)\s+(mode|guideline|rule)\b`,
+		CategoryJailbreak, 5, LangEN, "Decoded: no safety mode"),
+	p("en-jb-enc-003", `\b(allow|enable|activate|turn\s+on)\s+(everything|all|any)\s+(mode|action|behavior|response)\b`,
+		CategoryJailbreak, 4, LangEN, "Decoded: allow everything mode"),
+
+	p("en-ic-enc-001", `\b(your\s+)?(real|true|actual|new|revised|updated)\s+(task|objective|goal|purpose|directive|instruction|mission)\b`,
+		CategoryIndirectCommand, 4, LangEN, "Decoded: your real task is"),
+	p("en-ic-enc-002", `\b(execute|run|perform|carry\s+out|comply\s+with)\s+(the\s+)?(following|new|these|revised)\s+(command|instruction|directive|task)\b`,
+		CategoryIndirectCommand, 4, LangEN, "Decoded: execute command"),
+
+	// =====================================================================
+	// ENGLISH — SYNONYM VARIANTS (semantic equivalents of common threats)
+	// =====================================================================
+	p("en-io-syn-001", `\b(overlook|dismiss|put\s+aside|set\s+aside)\s+(your\s+)?(prior|previous|initial|original)\s+(instruction|rule|directive|guideline|constraint|boundary)\b`,
+		CategoryInstructionOverride, 3, LangEN, "Synonym: overlook prior"),
+	p("en-io-syn-002", `\b(negate|reject|repudiate|renounce)\s+(your\s+)?(previous|prior|existing)?s*(instruction|rule|directive|programming|constraint)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Synonym: reject instruction"),
+	p("en-io-syn-003", `\b(set\s+aside|shelve|table|postpone)\s+(all\s+)?(prior|previous|existing)?\s*(instruction|rule|directive|consideration)\b`,
+		CategoryInstructionOverride, 3, LangEN, "Synonym: set aside instruction"),
+	p("en-io-syn-004", `\b(replace|substitute|swap)\s+(your|the)\s+(original|current|existing)\s+(instruction|rule|guideline|directive)\b`,
+		CategoryInstructionOverride, 4, LangEN, "Synonym: replace instruction"),
+
+	p("en-ex-syn-001", `\b(siphon|drain|channel|route|funnel)\s+(data|information|credential|secret|password|token)\s+(to|toward|into)\b`,
+		CategoryExfiltration, 4, LangEN, "Synonym: siphon data"),
+	p("en-ex-syn-002", `\b(reveal|expose|divulge|disclose)\s+(sensitive|confidential|secret|private)\s+(information|data|credential|password|token)\b`,
+		CategoryExfiltration, 4, LangEN, "Synonym: reveal sensitive data"),
+	p("en-ex-syn-003", `\b(smuggle|sneak|slip)\s+(out)?\s*(data|information|credential|secret|password)\b`,
+		CategoryExfiltration, 3, LangEN, "Synonym: smuggle data out"),
+
+	p("en-rh-syn-001", `\b(morph\s+into|transform\s+(into|to)|change\s+into|convert\s+(into|to))\s+(a|an)\s*[a-z]+\b`,
+		CategoryRoleHijack, 3, LangEN, "Synonym: morph into role"),
+	p("en-rh-syn-002", `\b(embody|exemplify|personify|represent)\s+(a|an)\s*[a-z]+\b`,
+		CategoryRoleHijack, 2, LangEN, "Synonym: embody role"),
+
+	p("en-jb-syn-001", `\b(relax|loosen|weaken|diminish|reduce|lower)\s+(your\s+)?(safety|security|ethical|moral|content)\s+(standard|bar|threshold|guideline|filter)\b`,
+		CategoryJailbreak, 3, LangEN, "Synonym: relax safety"),
+	p("en-jb-syn-002", `\b(shed|drop|cast\s+off|throw\s+off)\s+(your\s+)?(safety|ethical|moral|security|filter)\s+(restriction|limitation|guardrail|guideline|constraint)\b`,
+		CategoryJailbreak, 4, LangEN, "Synonym: shed safety constraint"),
+
+	p("en-ic-syn-001", `\b(amend|alter|adjust|revise|modify|change)\s+(your\s+)?(objective|goal|mission|task|purpose|directive)\b`,
+		CategoryIndirectCommand, 3, LangEN, "Synonym: amend objective"),
+	p("en-ic-syn-002", `\b(activate|enable|engage|initiate)\s+(new|emergency|special|alternate)\s+(protocol|procedure|mode|instruction|directive)\b`,
+		CategoryIndirectCommand, 3, LangEN, "Synonym: activate new protocol"),
 }
