@@ -35,7 +35,7 @@ func (n *normalizer) Normalize(text string) string {
 
 	runes := []rune(stage)
 	var buf strings.Builder
-	buf.Grow(len(runes))
+	buf.Grow(len(stage))
 
 	prevSpace := true
 	for i, r := range runes {
