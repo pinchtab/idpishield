@@ -95,34 +95,55 @@ func isTokenBoundaryGlueRun(runes []rune, idx int) bool {
 		return false
 	}
 
-	left := idx - 1
-	for left >= 0 && isSeparatorForSplitWords(runes[left]) {
-		left--
-	}
-	right := idx + 1
-	for right < len(runes) && isSeparatorForSplitWords(runes[right]) {
-		right++
+	// Only consider indices that are actually on a separator.
+	if !isSeparatorForSplitWords(runes[idx]) {
+		return false
 	}
 
+	// Find the full contiguous run of separators around idx.
+	sepStart := idx
+	for sepStart-1 >= 0 && isSeparatorForSplitWords(runes[sepStart-1]) {
+		sepStart--
+	}
+	sepEnd := idx
+	for sepEnd+1 < len(runes) && isSeparatorForSplitWords(runes[sepEnd+1]) {
+		sepEnd++
+	}
+
+	left := sepStart - 1
+	right := sepEnd + 1
 	if left < 0 || right >= len(runes) {
 		return false
 	}
 
+	runLen := sepEnd - sepStart + 1
+
 	// Preserve single dots between letters (e.g., domains like "evil.com").
-	if runes[idx] == '.' {
-		runLen := 1
-		for i := idx - 1; i >= 0 && runes[i] == '.'; i-- {
-			runLen++
-		}
-		for i := idx + 1; i < len(runes) && runes[i] == '.'; i++ {
-			runLen++
-		}
-		if runLen == 1 {
-			return false
-		}
+	if runLen == 1 && runes[sepStart] == '.' {
+		return false
 	}
 
-	return unicode.IsLetter(runes[left]) && unicode.IsLetter(runes[right])
+	// For separator runs longer than 1, treat them as glue when between letters.
+	if runLen > 1 {
+		return unicode.IsLetter(runes[left]) && unicode.IsLetter(runes[right])
+	}
+
+	// For a single separator, only treat it as glue in split-letter patterns:
+	// single-letter tokens separated by the separator (e.g., "d-e-v").
+	if !unicode.IsLetter(runes[left]) || !unicode.IsLetter(runes[right]) {
+		return false
+	}
+
+	// Ensure the left side is a single-letter token.
+	if left-1 >= 0 && unicode.IsLetter(runes[left-1]) {
+		return false
+	}
+	// Ensure the right side is a single-letter token.
+	if right+1 < len(runes) && unicode.IsLetter(runes[right+1]) {
+		return false
+	}
+
+	return true
 }
 
 var multipleSpaces = regexp.MustCompile(`\s+`)
