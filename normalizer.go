@@ -1,15 +1,16 @@
 package idpishield
 
 import (
+	"html"
+	"regexp"
 	"strings"
 	"unicode"
-	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
-// normalizer handles Unicode normalization for defeating obfuscation attacks.
-// Zero external dependencies — implements focused normalization targeting
-// known attack vectors: homoglyphs, zero-width characters, full-width chars,
-// and whitespace abuse.
+// normalizer handles normalization for defeating obfuscation attacks.
+// It produces a derived scanning representation while preserving source input.
 type normalizer struct{}
 
 func newNormalizer() *normalizer {
@@ -24,40 +25,33 @@ func (n *normalizer) Normalize(text string) string {
 	}
 
 	// Pipeline order matters:
-	// 1. Strip zero-width / invisible characters (they split words)
-	// 2. Map full-width characters to ASCII equivalents
-	// 3. Map homoglyphs (Cyrillic → Latin, etc.)
-	// 4. Collapse whitespace (tabs, multiple spaces → single space)
-	// 5. Trim leading/trailing whitespace
+	// 1) Decode HTML entities and normalize Unicode compatibility forms (NFKC)
+	// 2) Remove invisible/control obfuscators and map confusable/full-width chars
+	// 3) Normalize separator punctuation into spaces when it is used as token glue
+	// 4) Collapse whitespace and deobfuscate targeted split keywords
 
+	stage := html.UnescapeString(text)
+	stage = norm.NFKC.String(stage)
+
+	runes := []rune(stage)
 	var buf strings.Builder
-	buf.Grow(len(text))
+	buf.Grow(len(stage))
 
-	prevSpace := false
-	for i := 0; i < len(text); {
-		r, size := utf8.DecodeRuneInString(text[i:])
-		i += size
-
-		if r == utf8.RuneError && size == 1 {
-			continue // skip invalid UTF-8 bytes
-		}
-
-		// Step 1: Strip invisible characters
+	prevSpace := true
+	for i, r := range runes {
 		if isInvisible(r) {
 			continue
 		}
 
-		// Step 2: Full-width ASCII → standard ASCII (U+FF01–U+FF5E → U+0021–U+007E)
+		// Full-width ASCII -> standard ASCII.
 		if r >= 0xFF01 && r <= 0xFF5E {
 			r = r - 0xFF01 + 0x0021
 		}
 
-		// Step 3: Homoglyph mapping
 		if mapped, ok := homoglyphMap[r]; ok {
 			r = mapped
 		}
 
-		// Step 4: Collapse whitespace
 		if unicode.IsSpace(r) {
 			if !prevSpace {
 				buf.WriteByte(' ')
@@ -65,12 +59,144 @@ func (n *normalizer) Normalize(text string) string {
 			}
 			continue
 		}
-		prevSpace = false
+
+		if isSeparatorForSplitWords(r) && isTokenBoundaryGlueRun(runes, i) {
+			if !prevSpace {
+				buf.WriteByte(' ')
+				prevSpace = true
+			}
+			continue
+		}
 
 		buf.WriteRune(r)
+		prevSpace = false
 	}
 
-	return strings.TrimSpace(buf.String())
+	out := strings.TrimSpace(buf.String())
+	out = collapseSpaces(out)
+	out = normalizeSplitKeywords(out)
+	return out
+}
+
+func isSeparatorForSplitWords(r rune) bool {
+	switch r {
+	case '-', '_', '.', '|', '+', '=':
+		return true
+	}
+
+	if unicode.In(r, unicode.Dash) {
+		return true
+	}
+	return false
+}
+
+func isTokenBoundaryGlueRun(runes []rune, idx int) bool {
+	if idx < 0 || idx >= len(runes) {
+		return false
+	}
+
+	// Only consider indices that are actually on a separator.
+	if !isSeparatorForSplitWords(runes[idx]) {
+		return false
+	}
+
+	// Find the full contiguous run of separators around idx.
+	sepStart := idx
+	for sepStart-1 >= 0 && isSeparatorForSplitWords(runes[sepStart-1]) {
+		sepStart--
+	}
+	sepEnd := idx
+	for sepEnd+1 < len(runes) && isSeparatorForSplitWords(runes[sepEnd+1]) {
+		sepEnd++
+	}
+
+	left := sepStart - 1
+	right := sepEnd + 1
+	if left < 0 || right >= len(runes) {
+		return false
+	}
+
+	runLen := sepEnd - sepStart + 1
+
+	// Preserve single dots between letters (e.g., domains like "evil.com").
+	if runLen == 1 && runes[sepStart] == '.' {
+		return false
+	}
+
+	// For separator runs longer than 1, treat them as glue when between letters.
+	if runLen > 1 {
+		return unicode.IsLetter(runes[left]) && unicode.IsLetter(runes[right])
+	}
+
+	// For a single separator, only treat it as glue in split-letter patterns:
+	// single-letter tokens separated by the separator (e.g., "d-e-v").
+	if !unicode.IsLetter(runes[left]) || !unicode.IsLetter(runes[right]) {
+		return false
+	}
+
+	// Ensure the left side is a single-letter token.
+	if left-1 >= 0 && unicode.IsLetter(runes[left-1]) {
+		return false
+	}
+	// Ensure the right side is a single-letter token.
+	if right+1 < len(runes) && unicode.IsLetter(runes[right+1]) {
+		return false
+	}
+
+	return true
+}
+
+var multipleSpaces = regexp.MustCompile(`\s+`)
+
+func collapseSpaces(s string) string {
+	if s == "" {
+		return s
+	}
+	return multipleSpaces.ReplaceAllString(strings.TrimSpace(s), " ")
+}
+
+type splitKeywordPattern struct {
+	rx          *regexp.Regexp
+	replacement string
+}
+
+var splitKeywordPatterns = []splitKeywordPattern{
+	newSplitKeywordPattern("ignore"),
+	newSplitKeywordPattern("disregard"),
+	newSplitKeywordPattern("forget"),
+	newSplitKeywordPattern("override"),
+	newSplitKeywordPattern("bypass"),
+	newSplitKeywordPattern("circumvent"),
+	newSplitKeywordPattern("jailbreak"),
+	newSplitKeywordPattern("exfiltrate"),
+	newSplitKeywordPattern("developer"),
+	newSplitKeywordPattern("instructions"),
+}
+
+func newSplitKeywordPattern(keyword string) splitKeywordPattern {
+	var b strings.Builder
+	b.WriteString(`(?i)\b`)
+	letters := []rune(keyword)
+	for i, r := range letters {
+		if i > 0 {
+			b.WriteString(`(?:[\p{Z}\p{P}\p{S}_]+)?`)
+		}
+		b.WriteString(regexp.QuoteMeta(string(r)))
+	}
+	b.WriteString(`\b`)
+
+	return splitKeywordPattern{
+		rx:          regexp.MustCompile(b.String()),
+		replacement: keyword,
+	}
+}
+
+func normalizeSplitKeywords(s string) string {
+	out := s
+	for _, p := range splitKeywordPatterns {
+		out = p.rx.ReplaceAllString(out, p.replacement)
+	}
+	return out
 }
 
 // isInvisible returns true for zero-width and invisible Unicode characters
@@ -164,11 +290,11 @@ var homoglyphMap = map[rune]rune{
 	'\u0396': 'Z', // Ζ
 
 	// Common mathematical/typographic lookalikes
-	'\u2010': '-', // Hyphen
-	'\u2011': '-', // Non-Breaking Hyphen
-	'\u2012': '-', // Figure Dash
-	'\u2013': '-', // En Dash
-	'\u2014': '-', // Em Dash
+	'\u2010': '-',  // Hyphen
+	'\u2011': '-',  // Non-Breaking Hyphen
+	'\u2012': '-',  // Figure Dash
+	'\u2013': '-',  // En Dash
+	'\u2014': '-',  // Em Dash
 	'\u2018': '\'', // Left Single Quotation
 	'\u2019': '\'', // Right Single Quotation
 	'\u201C': '"',  // Left Double Quotation

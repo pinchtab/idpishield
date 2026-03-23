@@ -12,7 +12,7 @@ const (
 	// ModeFast performs pattern matching only against raw input.
 	ModeFast Mode = "fast"
 
-	// ModeBalanced applies Unicode normalization before pattern matching.
+	// ModeBalanced applies normalization/preprocessing before pattern matching.
 	ModeBalanced Mode = "balanced"
 
 	// ModeDeep includes balanced analysis plus optional service escalation.
