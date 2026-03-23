@@ -23,7 +23,7 @@ idpi-shield follows a **tiered defense** architecture that prioritizes speed and
 │   │  • Risk scoring (0–100)                 │                   │
 │   │  • Multi-language (EN/FR/ES/DE/JA)      │                   │
 │   │  • Sub-millisecond response             │                   │
-│   │  • Zero external dependencies           │                   │
+│   │  • Bounded decoding + input limits      │                   │
 │   └───────────────┬─────────────────────────┘                   │
 │                   │ (optional, score ≥ 60)                      │
 │                   ▼                                              │
@@ -42,9 +42,9 @@ idpi-shield follows a **tiered defense** architecture that prioritizes speed and
 ```
 Input Text
     │
-    ├── [Mode: Light] ──────────────────────────┐
+       ├── [Mode: Fast] ───────────────────────────┐
     │                                            │
-    ├── [Mode: Balanced/Smart]                   │
+       ├── [Mode: Balanced/Deep]                    │
     │       │                                    │
     │       ▼                                    │
     │   ┌──────────┐                            │
@@ -73,9 +73,9 @@ Input Text
 └──────┬───────┘                                │
        │ RiskResult (local)                     │
        │                                        │
-       ├── [score < 60 OR mode ≠ smart] ──► Return local result
+       ├── [score < 60 OR mode ≠ deep] ───► Return local result
        │
-       ├── [score ≥ 60 AND mode = smart AND service configured]
+       ├── [score ≥ 60 AND mode = deep AND service configured]
        │       │
        │       ▼
        │   ┌──────────────┐
@@ -86,7 +86,7 @@ Input Text
        │     ┌────┴────┐
        │     │ success? │
        │     ├─ yes ──► Return service result
-       │     └─ no  ──► Return local result (graceful fallback)
+       │     └─ no  ──► Retry transient failures, then return local result
 ```
 
 ## Scoring Algorithm
@@ -150,11 +150,16 @@ All components are safe for concurrent use:
 - **Service client**: Uses `http.Client` which is concurrency-safe.
 - **Client**: Composes all of the above — no mutable state during operation.
 
-## Zero Dependencies
+## Runtime Guardrails
 
-The Go client library has **zero external dependencies**. All functionality is implemented using Go's standard library:
-- `regexp` for pattern matching
-- `net/url` for URL parsing
-- `net/http` for service client
-- `encoding/json` for serialization
-- `unicode` and `unicode/utf8` for normalization
+The current implementation includes lightweight production guardrails:
+
+1. **Input bounding**: `MaxInputBytes` limits analysis payload size.
+2. **Decode bounding**: `MaxDecodeDepth` and `MaxDecodedVariants` cap obfuscation expansion.
+3. **Retry controls**: `ServiceRetries` retries transient deep-service failures.
+4. **Circuit breaker**: `ServiceCircuitFailureThreshold` + `ServiceCircuitCooldown` prevent repeated service stalls from impacting local scans.
+5. **MCP HTTP auth**: Optional bearer/API-key auth (`--auth-token`) for streamable HTTP transport.
+
+## Dependencies
+
+The root library primarily uses Go standard library components plus targeted external packages where needed (for example Unicode normalization). CLI/MCP adapter components have additional dependencies.

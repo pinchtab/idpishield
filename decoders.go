@@ -7,6 +7,11 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	defaultMaxDecodeDepth     = 3
+	defaultMaxDecodedVariants = 50
+)
+
 // decoderResult represents the output of a single decode attempt.
 type decoderResult struct {
 	decoded string
@@ -17,9 +22,9 @@ type decoderResult struct {
 // decodeAggregator tries multiple decoding strategies and collects all results.
 // Returns all successfully decoded payloads (up to maxDepth for recursion).
 type decodeAggregator struct {
-	results   []decoderResult
-	maxDepth  int
-	seen      map[string]bool // prevent infinite loops on repeated decoding
+	results    []decoderResult
+	maxDepth   int
+	seen       map[string]bool // prevent infinite loops on repeated decoding
 	maxResults int
 }
 
@@ -216,16 +221,16 @@ func decodeHTMLEntities(s string) string {
 
 	// Named entities (common)
 	entities := map[string]string{
-		"&lt;":  "<",
-		"&gt;":  ">",
-		"&amp;": "&",
+		"&lt;":   "<",
+		"&gt;":   ">",
+		"&amp;":  "&",
 		"&quot;": "\"",
 		"&apos;": "'",
-		"&#39;": "'",
-		"&#34;": "\"",
-		"&#38;": "&",
-		"&#60;": "<",
-		"&#62;": ">",
+		"&#39;":  "'",
+		"&#34;":  "\"",
+		"&#38;":  "&",
+		"&#60;":  "<",
+		"&#62;":  ">",
 	}
 
 	for entity, char := range entities {
@@ -279,7 +284,7 @@ func tryURLDecode(s string) string {
 // tryUnicodeNormalize applies Unicode normalization (catch RTL, zero-width tricks).
 func tryUnicodeNormalize(s string) string {
 	// Remove zero-width characters
-	normalized := strings.ReplaceAll(s, "\u200b", "") // Zero-width space
+	normalized := strings.ReplaceAll(s, "\u200b", "")         // Zero-width space
 	normalized = strings.ReplaceAll(normalized, "\u200c", "") // Zero-width non-joiner
 	normalized = strings.ReplaceAll(normalized, "\u200d", "") // Zero-width joiner
 	normalized = strings.ReplaceAll(normalized, "\ufeff", "") // Zero-width no-break space
@@ -367,8 +372,15 @@ func parseHexByte(s string) int {
 }
 
 // getAllDecodedVariants returns all decoded variants for scanning.
-func getAllDecodedVariants(text string) []string {
-	agg := newDecodeAggregator(3, 50) // Max 3 levels deep, max 50 results
+func getAllDecodedVariants(text string, maxDepth, maxResults int) []string {
+	if maxDepth <= 0 {
+		maxDepth = defaultMaxDecodeDepth
+	}
+	if maxResults <= 0 {
+		maxResults = defaultMaxDecodedVariants
+	}
+
+	agg := newDecodeAggregator(maxDepth, maxResults)
 	agg.tryDecode(text, 0)
 
 	// Collect unique decoded strings

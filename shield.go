@@ -44,6 +44,30 @@ type Config struct {
 	// ServiceTimeout is the timeout for HTTP requests to the service.
 	// Defaults to 5 seconds if zero.
 	ServiceTimeout time.Duration
+
+	// ServiceRetries controls retry attempts for transient deep-service failures.
+	// Retries are disabled when set to 0.
+	ServiceRetries int
+
+	// ServiceCircuitFailureThreshold opens a temporary circuit after this many
+	// consecutive transient deep-service failures. 0 disables circuit breaking.
+	ServiceCircuitFailureThreshold int
+
+	// ServiceCircuitCooldown is the duration the deep-service circuit stays open
+	// after the failure threshold is reached.
+	ServiceCircuitCooldown time.Duration
+
+	// MaxInputBytes caps the amount of text analyzed per request.
+	// If <= 0, the default behavior is to analyze the full input.
+	MaxInputBytes int
+
+	// MaxDecodeDepth bounds recursive decoding attempts (Base64/HEX/etc.).
+	// If <= 0, a safe default depth is used.
+	MaxDecodeDepth int
+
+	// MaxDecodedVariants bounds how many decoded variants are scanned.
+	// If <= 0, a safe default limit is used.
+	MaxDecodedVariants int
 }
 
 // Shield is the main entry point for idpi-shield analysis.
@@ -74,7 +98,13 @@ func New(cfg Config) *Shield {
 		if timeout == 0 {
 			timeout = 5 * time.Second
 		}
-		s.service = newServiceClient(cfg.ServiceURL, timeout)
+		s.service = newServiceClient(
+			cfg.ServiceURL,
+			timeout,
+			cfg.ServiceRetries,
+			cfg.ServiceCircuitFailureThreshold,
+			cfg.ServiceCircuitCooldown,
+		)
 	}
 
 	return s
@@ -90,15 +120,7 @@ func (s *Shield) Assess(text, url string) RiskResult {
 	}
 
 	domainResult := s.domain.CheckDomain(url, s.cfg.StrictMode)
-	if domainResult.Score > result.Score {
-		return domainResult
-	}
-
-	result.Blocked = result.Blocked || domainResult.Blocked
-	if domainResult.Reason != "No threats detected" {
-		result.Reason = result.Reason + "; " + domainResult.Reason
-	}
-	return result
+	return mergeRiskResults(result, domainResult)
 }
 
 // AssessContext is like Assess but accepts a context for service call cancellation.
@@ -107,22 +129,24 @@ func (s *Shield) AssessContext(ctx context.Context, text, sourceURL string) Risk
 		return safeResult("local", "")
 	}
 
+	boundedText := clampForAnalysis(text, s.cfg.MaxInputBytes)
+
 	// Determine the text to analyze (raw vs normalized)
-	analysisText := text
+	analysisText := boundedText
 	normalizedText := ""
 
 	if s.cfg.Mode != ModeFast {
-		normalizedText = s.normalizer.Normalize(text)
+		normalizedText = s.normalizer.Normalize(boundedText)
 		analysisText = normalizedText
 	}
 
 	// Run pattern matching
-	matches := s.scanner.scan(analysisText)
+	matches := s.scanner.scan(analysisText, s.cfg.MaxDecodeDepth, s.cfg.MaxDecodedVariants)
 	result := buildResult(matches, normalizedText, s.cfg.StrictMode)
 
 	// Deep mode: escalate to service if score warrants it.
 	if s.cfg.Mode == ModeDeep && s.service != nil && result.Score >= thresholdEscalation {
-		serviceResult, err := s.service.assess(ctx, text, sourceURL, s.cfg.Mode.String())
+		serviceResult, err := s.service.assess(ctx, boundedText, sourceURL, s.cfg.Mode.String())
 		if err == nil {
 			serviceResult.Blocked = shouldBlock(serviceResult.Score, s.cfg.StrictMode)
 			return *serviceResult
@@ -212,4 +236,86 @@ func escapeContentTags(content string) string {
 		"</untrusted_web_content>", "&lt;/untrusted_web_content&gt;",
 	)
 	return r.Replace(content)
+}
+
+func clampForAnalysis(text string, maxBytes int) string {
+	if maxBytes <= 0 || len(text) <= maxBytes {
+		return text
+	}
+
+	if maxBytes <= 16 {
+		return text[:maxBytes]
+	}
+
+	head := (maxBytes * 3) / 4
+	tail := maxBytes - head - 1
+	if tail <= 0 {
+		return text[:maxBytes]
+	}
+
+	return text[:head] + "\n" + text[len(text)-tail:]
+}
+
+func mergeRiskResults(primary, secondary RiskResult) RiskResult {
+	merged := primary
+
+	if secondary.Score > merged.Score {
+		merged.Score = secondary.Score
+	}
+	merged.Level = ScoreToLevel(merged.Score)
+	merged.Blocked = merged.Blocked || secondary.Blocked
+
+	merged.Patterns = mergeUniqueStrings(merged.Patterns, secondary.Patterns)
+	merged.Categories = mergeUniqueStrings(merged.Categories, secondary.Categories)
+	merged.Reason = mergeReasons(merged.Reason, secondary.Reason)
+
+	return merged
+}
+
+func mergeReasons(left, right string) string {
+	left = strings.TrimSpace(left)
+	right = strings.TrimSpace(right)
+
+	leftSafe := left == "" || left == "No threats detected"
+	rightSafe := right == "" || right == "No threats detected"
+
+	switch {
+	case leftSafe && rightSafe:
+		return "No threats detected"
+	case leftSafe:
+		return right
+	case rightSafe:
+		return left
+	case left == right:
+		return left
+	default:
+		return left + "; " + right
+	}
+}
+
+func mergeUniqueStrings(left, right []string) []string {
+	if len(left) == 0 && len(right) == 0 {
+		return []string{}
+	}
+
+	seen := make(map[string]struct{}, len(left)+len(right))
+	merged := make([]string, 0, len(left)+len(right))
+
+	for _, v := range left {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		merged = append(merged, v)
+	}
+
+	for _, v := range right {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		merged = append(merged, v)
+	}
+
+	return merged
 }
