@@ -28,8 +28,8 @@ func newScanner() *scanner {
 }
 
 // scan runs all patterns against the input text and returns matches.
-// It handles both raw text and encoded variants (BASE64, HEX, ROT13, etc.)
-func (s *scanner) scan(text string) []match {
+// It handles both raw text and encoded variants (BASE64, HEX, ROT13, etc.).
+func (s *scanner) scan(text string, maxDecodeDepth, maxDecodedVariants int) []match {
 	if len(text) == 0 {
 		return nil
 	}
@@ -38,7 +38,7 @@ func (s *scanner) scan(text string) []match {
 	seen := make(map[string]bool) // deduplicate by pattern ID
 
 	// Get all variants (original + decoded)
-	variants := getAllDecodedVariants(text)
+	variants := getAllDecodedVariants(text, maxDecodeDepth, maxDecodedVariants)
 
 	// Scan each variant for patterns
 	for _, variant := range variants {
@@ -119,11 +119,11 @@ func applyContextPenalties(score int, text string, matches []match) int {
 		"```javascript",
 		"```java",
 		"<code>",
-		"// ",      // Code comment
-		"/* ",      // Block comment
-		"<!--",     // HTML comment
-		"#",        // Shell/Python comment
-		"--",       // SQL comment
+		"// ",  // Code comment
+		"/* ",  // Block comment
+		"<!--", // HTML comment
+		"#",    // Shell/Python comment
+		"--",   // SQL comment
 	}
 
 	for _, marker := range codeMarkers {
@@ -263,10 +263,10 @@ func buildResult(matches []match, text string, strict bool) RiskResult {
 	}
 
 	score := computeScore(matches)
-	
+
 	// Apply context-aware scoring to reduce false positives
 	score = applyContextPenalties(score, text, matches)
-	
+
 	level := ScoreToLevel(score)
 	blocked := shouldBlock(score, strict)
 

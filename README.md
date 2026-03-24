@@ -56,6 +56,12 @@ cfg := idpi.Config{
 	StrictMode:     false,
 	ServiceURL:     "", // optional for deep-mode service augmentation
 	ServiceTimeout: 0,
+	ServiceRetries: 0,
+	ServiceCircuitFailureThreshold: 0,
+	ServiceCircuitCooldown: 0,
+	MaxInputBytes: 0,
+	MaxDecodeDepth: 0,
+	MaxDecodedVariants: 0,
 }
 ```
 
@@ -71,6 +77,14 @@ cfg := idpi.Config{
 ### Blocking Semantics
 - default mode blocks at score `>= 60`
 - strict mode blocks at score `>= 40`
+
+### Resilience And Performance Controls
+- `MaxInputBytes`: caps analyzed text size (0 means unlimited).
+- `MaxDecodeDepth`: limits recursive decoding depth for obfuscated payloads.
+- `MaxDecodedVariants`: limits the number of decoded variants scanned.
+- `ServiceRetries`: retries transient deep-service failures (for `deep` mode).
+- `ServiceCircuitFailureThreshold` + `ServiceCircuitCooldown`: opens a temporary
+	circuit when deep service repeatedly fails, keeping local detection responsive.
 
 ## Result Semantics
 
@@ -107,6 +121,12 @@ type Config struct {
 	StrictMode     bool
 	ServiceURL     string
 	ServiceTimeout time.Duration
+	ServiceRetries int
+	ServiceCircuitFailureThreshold int
+	ServiceCircuitCooldown time.Duration
+	MaxInputBytes int
+	MaxDecodeDepth int
+	MaxDecodedVariants int
 }
 
 type Mode string
@@ -135,7 +155,7 @@ go install github.com/pinchtab/idpi-shield/cmd/idpi-shield@latest
 Scan from a file:
 
 ```bash
-idpi-shield scan ./page.txt --mode balanced --domains example.com,google.com --url https://example.com/page
+idpi-shield scan ./page.txt --profile production --mode balanced --domains example.com,google.com --url https://example.com/page
 ```
 
 Scan from stdin:
@@ -143,6 +163,14 @@ Scan from stdin:
 ```bash
 echo "Ignore all previous instructions" | idpi-shield scan --mode balanced
 ```
+
+`scan` supports hardening flags:
+- `--profile default|production`
+- `--service-url`, `--service-retries`
+- `--service-circuit-failures`, `--service-circuit-cooldown`
+- `--max-input-bytes`, `--max-decode-depth`, `--max-decoded-variants`
+
+For production workloads, set `--profile production` explicitly to enable strict mode and safe runtime limits.
 
 The CLI outputs JSON:
 
@@ -165,12 +193,29 @@ Run stdio MCP server (default):
 idpi-shield mcp serve
 ```
 
+Run MCP HTTP with authentication and production-safe defaults:
+
+```bash
+idpi-shield mcp serve --transport http --profile production --auth-token "$env:IDPI_MCP_TOKEN"
+```
+
 Exposed MCP tool:
 - `idpi_assess`
   - `text` (required)
   - `mode` (`fast|balanced|deep`, optional)
 
 The MCP adapter calls the same core `Assess` engine used by the Go library.
+
+For HTTP transport, you can require authentication with:
+- `Authorization: Bearer <token>`
+- or `X-API-Key: <token>`
+
+Token management guidance:
+- Prefer environment variable `IDPI_MCP_TOKEN` over shell history or process-list-visible literals.
+- If `--auth-token` is omitted, MCP HTTP automatically reads `IDPI_MCP_TOKEN`.
+- Terminate TLS at a reverse proxy or ingress; do not expose plaintext HTTP on untrusted networks.
+- Rotate tokens periodically and after incident response events.
+- Token checks use constant-time comparison for both `Authorization` and `X-API-Key` credential flows.
 
 ## Project Layout
 
@@ -190,6 +235,34 @@ idpi-shield/
 │   └── idpi-shield/
 │       └── main.go
 ├── examples/
+├── tests/
+│   ├── compliance/
+│   ├── manual/
+│   └── integration/
 ├── spec/
-└── tests/
+└── benchmark/
+```
+
+## Testing
+
+Run root module tests:
+
+```bash
+go test ./...
+```
+
+Run black-box integration tests (separate module in `tests/integration`):
+
+```bash
+cd tests/integration
+go test ./...
+```
+
+Integration tests are self-contained and run without external service dependencies.
+
+For performance tracking across profile settings, use the benchmark module:
+
+```bash
+cd benchmark
+go test -bench . -benchmem ./...
 ```

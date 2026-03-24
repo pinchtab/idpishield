@@ -28,7 +28,7 @@ Content-Type: application/json
 {
   "text": "string (required) — the text content to analyze",
   "url": "string (optional) — source URL for context",
-  "mode": "string (optional) — analysis mode: light | balanced | smart (default: smart)"
+  "mode": "string (optional) — analysis mode: fast | balanced | deep (default: balanced)"
 }
 ```
 
@@ -36,7 +36,7 @@ Content-Type: application/json
 |--------|--------|----------|-------------|
 | `text` | string | yes      | The text content to analyze for prompt injection. |
 | `url`  | string | no       | The URL where the text was retrieved from. Provides context for analysis. |
-| `mode` | string | no       | Analysis mode. Defaults to `"smart"` on the service side. |
+| `mode` | string | no       | Analysis mode. Defaults to `"balanced"` on the service side. |
 
 #### Response
 
@@ -108,7 +108,7 @@ Maximum input text size: **1 MB** (1,048,576 bytes). Requests exceeding this lim
 ## Client Integration
 
 Client libraries connect to this API only when:
-1. `mode` is set to `smart`.
+1. `mode` is set to `deep`.
 2. `serviceURL` is configured.
 3. Local scan score ≥ 60.
 
