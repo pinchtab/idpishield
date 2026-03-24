@@ -1,4 +1,4 @@
-package idpishield
+package engine
 
 import (
 	"fmt"
@@ -63,7 +63,6 @@ func ParseModeStrict(s string) (Mode, error) {
 }
 
 // RiskResult is the canonical return type for all idpi-shield analysis operations.
-// Every client library and the service returns this exact structure.
 type RiskResult struct {
 	// Score is the risk score from 0 (clean) to 100 (confirmed attack).
 	Score int `json:"score"`
@@ -100,18 +99,16 @@ func ScoreToLevel(score int) string {
 	}
 }
 
-// shouldBlock determines whether content should be blocked given a score and config.
-func shouldBlock(score int, strict bool) bool {
+// ShouldBlock determines whether content should be blocked given a score and config.
+func ShouldBlock(score int, strict bool) bool {
 	if strict {
 		return score >= 40
 	}
 	return score >= 60
 }
 
-// safeResult returns a clean RiskResult with no threats detected.
-func safeResult(source, normalized string) RiskResult {
-	_ = source
-	_ = normalized
+// SafeResult returns a clean RiskResult with no threats detected.
+func SafeResult() RiskResult {
 	return RiskResult{
 		Score:      0,
 		Level:      "safe",

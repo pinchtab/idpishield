@@ -1,4 +1,4 @@
-package idpishield
+package engine
 
 import (
 	"fmt"
@@ -259,7 +259,7 @@ func computeScore(matches []match) int {
 // It applies context-aware scoring to reduce false positives.
 func buildResult(matches []match, text string, strict bool) RiskResult {
 	if len(matches) == 0 {
-		return safeResult("local", "")
+		return SafeResult()
 	}
 
 	score := computeScore(matches)
@@ -268,7 +268,7 @@ func buildResult(matches []match, text string, strict bool) RiskResult {
 	score = applyContextPenalties(score, text, matches)
 
 	level := ScoreToLevel(score)
-	blocked := shouldBlock(score, strict)
+	blocked := ShouldBlock(score, strict)
 
 	// Collect unique pattern IDs
 	patternIDs := make([]string, 0, len(matches))

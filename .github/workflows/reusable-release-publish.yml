@@ -1,0 +1,46 @@
+name: Reusable / Release Publish
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to publish from (e.g. refs/tags/v0.1.0)'
+        required: true
+        type: string
+      tag:
+        description: 'Release tag with v prefix'
+        required: true
+        type: string
+
+env:
+  GORELEASER_VERSION: v2.14.3
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release Binaries
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.23'
+
+      - name: Run GoReleaser
+        run: |
+          curl -sfL https://goreleaser.com/static/run | VERSION="$GORELEASER_VERSION" bash -s -- release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

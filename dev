@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+BOLD=$'\033[1m'
+ACCENT=$'\033[38;2;251;191;36m'
+MUTED=$'\033[38;2;90;100;128m'
+SUCCESS=$'\033[38;2;0;229;204m'
+ERROR=$'\033[38;2;230;57;70m'
+NC=$'\033[0m'
+
+commands=(
+  "doctor:🩺:Setup dev environment"
+  "test:🧪:Run unit tests"
+  "test verbose:🧪:Run unit tests (verbose)"
+  "test race:🧪:Run unit tests with race detector"
+  "coverage:📊:Run tests with coverage report"
+  "lint:🔍:Run golangci-lint"
+  "fmt:✨:Format code"
+  "vet:🔬:Run go vet"
+  "check:✅:Run all checks (fmt + vet + lint + test)"
+  "build:📦:Build CLI binary"
+  "benchmark:🏋:Run benchmarks"
+)
+
+show_help() {
+  echo ""
+  echo "  ${BOLD}${ACCENT}idpi-shield${NC} ${MUTED}— development tool${NC}"
+  echo ""
+  for entry in "${commands[@]}"; do
+    IFS=: read -r cmd icon desc <<< "$entry"
+    printf "  ${ACCENT}%-22s${NC} %s %s\n" "./dev $cmd" "$icon" "$desc"
+  done
+  echo ""
+}
+
+run_test() {
+  echo "  ${ACCENT}${BOLD}🧪 Running tests${NC}"
+  go test ./... -count=1
+  echo "  ${SUCCESS}✓${NC} Tests passed"
+}
+
+run_test_verbose() {
+  echo "  ${ACCENT}${BOLD}🧪 Running tests (verbose)${NC}"
+  go test ./... -count=1 -v
+}
+
+run_test_race() {
+  echo "  ${ACCENT}${BOLD}🧪 Running tests with race detector${NC}"
+  go test ./... -count=1 -race
+  echo "  ${SUCCESS}✓${NC} Tests passed (race)"
+}
+
+run_coverage() {
+  echo "  ${ACCENT}${BOLD}📊 Running tests with coverage${NC}"
+  go test ./... -count=1 -coverprofile=coverage.out -covermode=atomic
+  go tool cover -func=coverage.out | tail -1
+  echo ""
+  echo "  ${MUTED}HTML report: go tool cover -html=coverage.out${NC}"
+}
+
+run_lint() {
+  echo "  ${ACCENT}${BOLD}🔍 Running linter${NC}"
+  golangci-lint run
+  echo "  ${SUCCESS}✓${NC} Lint clean"
+}
+
+run_fmt() {
+  echo "  ${ACCENT}${BOLD}✨ Formatting code${NC}"
+  gofmt -w .
+  echo "  ${SUCCESS}✓${NC} Formatted"
+}
+
+run_vet() {
+  echo "  ${ACCENT}${BOLD}🔬 Running go vet${NC}"
+  go vet ./...
+  echo "  ${SUCCESS}✓${NC} Vet clean"
+}
+
+run_check() {
+  echo "  ${ACCENT}${BOLD}✅ Running all checks${NC}"
+  echo ""
+
+  echo "  ${MUTED}1/4 Format check${NC}"
+  unformatted=$(gofmt -l .)
+  if [ -n "$unformatted" ]; then
+    echo "  ${ERROR}✗${NC} Unformatted files:"
+    echo "$unformatted"
+    exit 1
+  fi
+  echo "  ${SUCCESS}✓${NC} Format"
+
+  echo "  ${MUTED}2/4 Vet${NC}"
+  go vet ./...
+  echo "  ${SUCCESS}✓${NC} Vet"
+
+  echo "  ${MUTED}3/4 Lint${NC}"
+  golangci-lint run
+  echo "  ${SUCCESS}✓${NC} Lint"
+
+  echo "  ${MUTED}4/4 Tests${NC}"
+  go test ./... -count=1 -race
+  echo "  ${SUCCESS}✓${NC} Tests"
+
+  echo ""
+  echo "  ${SUCCESS}${BOLD}All checks passed${NC}"
+}
+
+run_build() {
+  echo "  ${ACCENT}${BOLD}📦 Building CLI${NC}"
+  go build -o idpi-shield ./cmd/idpi-shield
+  echo "  ${SUCCESS}✓${NC} Built: ./idpi-shield"
+}
+
+run_benchmark() {
+  echo "  ${ACCENT}${BOLD}🏋 Running benchmarks${NC}"
+  go test ./benchmark/ -count=1 -v
+}
+
+case "${1:-help}" in
+  doctor)    exec bash scripts/doctor.sh ;;
+  test)
+    case "${2:-}" in
+      verbose) run_test_verbose ;;
+      race) run_test_race ;;
+      *) run_test ;;
+    esac
+    ;;
+  coverage)  run_coverage ;;
+  lint)      run_lint ;;
+  fmt)       run_fmt ;;
+  vet)       run_vet ;;
+  check)     run_check ;;
+  build)     run_build ;;
+  benchmark) run_benchmark ;;
+  help|*)    show_help ;;
+esac

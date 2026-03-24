@@ -1,4 +1,4 @@
-package idpishield
+package engine
 
 import (
 	"html"
@@ -84,10 +84,7 @@ func isSeparatorForSplitWords(r rune) bool {
 		return true
 	}
 
-	if unicode.In(r, unicode.Dash) {
-		return true
-	}
-	return false
+	return unicode.In(r, unicode.Dash)
 }
 
 func isTokenBoundaryGlueRun(runes []rune, idx int) bool {

@@ -1,4 +1,4 @@
-package idpishield
+package engine
 
 import (
 	"encoding/base64"
@@ -310,11 +310,12 @@ func isValidDecodedText(s string) bool {
 	// Check for minimal printability
 	printable := 0
 	for _, r := range s {
-		if r >= 32 && r < 127 {
+		switch {
+		case r >= 32 && r < 127:
 			printable++
-		} else if r == '\n' || r == '\r' || r == '\t' {
+		case r == '\n' || r == '\r' || r == '\t':
 			printable++
-		} else if utf8.RuneLen(r) > 0 {
+		case utf8.RuneLen(r) > 0:
 			printable++ // Unicode
 		}
 	}
@@ -345,7 +346,8 @@ func isHexString(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+		isHex := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+		if !isHex {
 			return false
 		}
 	}

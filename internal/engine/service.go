@@ -1,4 +1,4 @@
-package idpishield
+package engine
 
 import (
 	"bytes"
@@ -152,7 +152,7 @@ func (s *serviceClient) assessOnce(ctx context.Context, payload []byte) (*RiskRe
 		}
 		return nil, true, fmt.Errorf("idpishield: service request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		retryable := resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= http.StatusInternalServerError

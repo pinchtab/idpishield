@@ -1,2 +1,11 @@
-#reports
+/idpi-shield
+*.exe
+coverage.out
+cover.out
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
 benchmark/reports/

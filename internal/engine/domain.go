@@ -1,4 +1,4 @@
-package idpishield
+package engine
 
 import (
 	"net/url"
@@ -43,7 +43,7 @@ func (d *domainChecker) IsAllowed(rawURL string) bool {
 // CheckDomain builds a RiskResult for a domain check.
 func (d *domainChecker) CheckDomain(rawURL string, strict bool) RiskResult {
 	if len(d.patterns) == 0 {
-		return safeResult("local", "")
+		return SafeResult()
 	}
 
 	host := extractHost(rawURL)
@@ -51,7 +51,7 @@ func (d *domainChecker) CheckDomain(rawURL string, strict bool) RiskResult {
 		return RiskResult{
 			Score:      30,
 			Level:      ScoreToLevel(30),
-			Blocked:    shouldBlock(30, strict),
+			Blocked:    ShouldBlock(30, strict),
 			Reason:     "Unable to parse domain from URL",
 			Patterns:   []string{},
 			Categories: []string{},
@@ -59,14 +59,14 @@ func (d *domainChecker) CheckDomain(rawURL string, strict bool) RiskResult {
 	}
 
 	if d.IsAllowed(rawURL) {
-		return safeResult("local", host)
+		return SafeResult()
 	}
 
 	score := 70
 	return RiskResult{
 		Score:      score,
 		Level:      ScoreToLevel(score),
-		Blocked:    shouldBlock(score, strict),
+		Blocked:    ShouldBlock(score, strict),
 		Reason:     "Domain not in allowlist: " + host,
 		Patterns:   []string{},
 		Categories: []string{},

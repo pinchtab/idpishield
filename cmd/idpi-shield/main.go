@@ -280,6 +280,7 @@ func parseDomains(raw string) []string {
 	return domains
 }
 
+//nolint:errcheck // usage output — errors are not actionable
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "idpi-shield CLI")
 	fmt.Fprintln(w)
@@ -306,6 +307,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --max-decoded-variants  max decoded variants scanned (0 = default)")
 }
 
+//nolint:errcheck // usage output — errors are not actionable
 func printMCPUsage(w io.Writer) {
 	fmt.Fprintln(w, "idpi-shield mcp serve")
 	fmt.Fprintln(w)

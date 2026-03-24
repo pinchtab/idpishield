@@ -26,8 +26,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/pinchtab/idpi-shield/benchmark"
 	idpishield "github.com/pinchtab/idpi-shield"
+	"github.com/pinchtab/idpi-shield/benchmark"
 )
 
 func main() {

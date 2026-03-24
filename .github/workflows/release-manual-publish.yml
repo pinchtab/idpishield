@@ -1,0 +1,69 @@
+name: Release / Manual Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish (e.g. v0.1.0)'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-manual-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Existing Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      ref: ${{ steps.meta.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Normalize and validate tag
+        id: meta
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ "${TAG#v}" = "$TAG" ]; then
+            TAG="v$TAG"
+          fi
+
+          git fetch --tags origin
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "tag $TAG not found on origin" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+
+  approval:
+    name: Manual Approval
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: release-approval
+    steps:
+      - name: Summarize
+        run: |
+          echo "## Manual Publish Approval" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: ${{ needs.validate.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish Existing Tag
+    needs:
+      - validate
+      - approval
+    permissions:
+      contents: write
+    uses: ./.github/workflows/reusable-release-publish.yml
+    with:
+      ref: ${{ needs.validate.outputs.ref }}
+      tag: ${{ needs.validate.outputs.tag }}
+    secrets: inherit

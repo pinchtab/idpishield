@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "🔍 Running pre-commit checks..."
+
+staged_go=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+if [ -z "$staged_go" ]; then
+  echo "⏭️  No Go files staged, skipping checks"
+  exit 0
+fi
+
+echo "📦 Checking Go files..."
+
+# gofmt check
+unformatted=$(gofmt -l $staged_go 2>/dev/null || true)
+if [ -n "$unformatted" ]; then
+  echo "❌ gofmt: files not formatted:"
+  echo "$unformatted"
+  echo "Run: gofmt -w $unformatted"
+  exit 1
+fi
+
+# golangci-lint
+GOLANGCI_LINT=""
+if command -v golangci-lint &>/dev/null; then
+  GOLANGCI_LINT="golangci-lint"
+elif [ -x "${GOPATH:-$HOME/go}/bin/golangci-lint" ]; then
+  GOLANGCI_LINT="${GOPATH:-$HOME/go}/bin/golangci-lint"
+fi
+
+if [ -n "$GOLANGCI_LINT" ]; then
+  dirs=$(echo "$staged_go" | xargs -n1 dirname | sort -u | sed 's|$|/...|')
+  if ! $GOLANGCI_LINT run --timeout=5m $dirs; then
+    echo "❌ golangci-lint: issues found"
+    exit 1
+  fi
+else
+  echo "⚠️  golangci-lint not found, skipping lint"
+  echo "   Install: brew install golangci-lint"
+fi
+
+echo "✅ Pre-commit checks passed"

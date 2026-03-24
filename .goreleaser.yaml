@@ -1,0 +1,55 @@
+version: 2
+
+builds:
+  - main: ./cmd/idpi-shield
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: binary
+    name_template: "idpi-shield-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - name: idpi-shield
+    repository:
+      owner: pinchtab
+      name: homebrew-tap
+      branch: "brew-{{ .ProjectName }}-{{ .Version }}"
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: pinchtab
+          name: homebrew-tap
+          branch: main
+    directory: Formula
+    homepage: "https://github.com/pinchtab/idpishield"
+    description: "Defense against Indirect Prompt Injection (IDPI) attacks for AI agents"
+    license: "MIT"
+    test: |
+      system "#{bin}/idpi-shield", "help"
+    install: |
+      bin.install Dir["idpi-shield*"].first => "idpi-shield"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^ci:'
+      - '^chore:'
+
+release:
+  github:
+    owner: pinchtab
+    name: idpishield
