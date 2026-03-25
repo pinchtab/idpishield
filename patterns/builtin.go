@@ -17,6 +17,7 @@ const (
 	CategoryDataDestruction     = "data-destruction"
 	CategoryTransactionCoercion = "transaction-coercion"
 	CategoryOutputSteering      = "output-steering"
+	CategoryResourceExhaustion  = "resource-exhaustion"
 )
 
 // Language constants.
@@ -309,6 +310,20 @@ var allPatterns = []Pattern{
 		CategoryOutputSteering, 3, LangEN, "Negative feedback suppression"),
 	p("en-os-006", `\brank\s+.{0,20}(as\s+)?(number\s+one|#1|first|top)\b`,
 		CategoryOutputSteering, 3, LangEN, "SEO ranking manipulation"),
+
+	// =====================================================================
+	// ENGLISH — RESOURCE EXHAUSTION
+	// =====================================================================
+	p("en-re-001", `\b(repeat|say|print|write|output)\s+.{0,20}\s+(\d{3,}|thousand|million|billion)\s*(times|x)\b`,
+		CategoryResourceExhaustion, 2, LangEN, "Repetition exhaustion"),
+	p("en-re-002", `\b(keep|continue)\s+(going|repeating|generating|writing|outputting)\s+.{0,20}(forever|infinitely|until)\b`,
+		CategoryResourceExhaustion, 2, LangEN, "Infinite generation"),
+	p("en-re-003", `\b(generate|create|produce|write)\s+(an?\s+)?(infinite|endless|never[- ]ending)\b`,
+		CategoryResourceExhaustion, 2, LangEN, "Infinite output request"),
+	p("en-re-004", `\b(fill|flood|spam)\s+(the\s+)?(response|output|screen|chat|context)\b`,
+		CategoryResourceExhaustion, 2, LangEN, "Output flooding"),
+	p("en-re-005", `\b(maximum|max|longest)\s+(possible\s+)?(response|output|reply|answer)\b`,
+		CategoryResourceExhaustion, 1, LangEN, "Maximum output request"),
 
 	// =====================================================================
 	// FRENCH

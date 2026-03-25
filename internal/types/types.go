@@ -64,6 +64,22 @@ func ParseModeStrict(s string) (Mode, error) {
 	}
 }
 
+// Intent classifies the attacker's goal based on detected patterns.
+// Derived from the Unit 42 IDPI taxonomy (March 2026).
+type Intent string
+
+const (
+	IntentNone              Intent = ""
+	IntentInstructionBypass Intent = "instruction-bypass"
+	IntentDataExfiltration  Intent = "data-exfiltration"
+	IntentDataDestruction   Intent = "data-destruction"
+	IntentUnauthorizedTx    Intent = "unauthorized-transaction"
+	IntentJailbreak         Intent = "jailbreak"
+	IntentOutputSteering    Intent = "output-steering"
+	IntentSystemCompromise  Intent = "system-compromise"
+	IntentResourceExhaust   Intent = "resource-exhaustion"
+)
+
 // RiskResult is the canonical return type for all idpishield analysis operations.
 // Every client library and the service returns this exact structure.
 type RiskResult struct {
@@ -84,6 +100,9 @@ type RiskResult struct {
 
 	// Categories lists the unique threat categories detected.
 	Categories []string `json:"categories"`
+
+	// Intent classifies the primary attacker goal. Empty when no threat is detected.
+	Intent Intent `json:"intent,omitempty"`
 }
 
 // ScoreToLevel maps a 0–100 score to its corresponding severity level.

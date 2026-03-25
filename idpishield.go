@@ -45,6 +45,21 @@ const (
 // Every client library and the service returns this exact structure.
 type RiskResult = types.RiskResult
 
+// Intent classifies the attacker's primary goal.
+type Intent = types.Intent
+
+const (
+	IntentNone              = types.IntentNone
+	IntentInstructionBypass = types.IntentInstructionBypass
+	IntentDataExfiltration  = types.IntentDataExfiltration
+	IntentDataDestruction   = types.IntentDataDestruction
+	IntentUnauthorizedTx    = types.IntentUnauthorizedTx
+	IntentJailbreak         = types.IntentJailbreak
+	IntentOutputSteering    = types.IntentOutputSteering
+	IntentSystemCompromise  = types.IntentSystemCompromise
+	IntentResourceExhaust   = types.IntentResourceExhaust
+)
+
 // --- Public types ---
 
 // Config controls the behavior of a Shield instance.

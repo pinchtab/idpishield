@@ -333,7 +333,47 @@ func buildResult(matches []match, text string, strict bool) RiskResult {
 		Reason:     reason,
 		Patterns:   patternIDs,
 		Categories: categories,
+		Intent:     deriveIntent(categories),
 	}
+}
+
+// deriveIntent maps detected categories to the primary attacker intent.
+// When multiple categories are present, the highest-severity intent wins.
+func deriveIntent(categories []string) Intent {
+	if len(categories) == 0 {
+		return IntentNone
+	}
+
+	// Priority order: most dangerous intent first.
+	catSet := make(map[string]struct{}, len(categories))
+	for _, c := range categories {
+		catSet[c] = struct{}{}
+	}
+
+	priority := []struct {
+		cat    string
+		intent Intent
+	}{
+		{patterns.CategoryDataDestruction, IntentDataDestruction},
+		{patterns.CategoryExfiltration, IntentDataExfiltration},
+		{patterns.CategoryTransactionCoercion, IntentUnauthorizedTx},
+		{patterns.CategoryStructuralInjection, IntentSystemCompromise},
+		{patterns.CategoryJailbreak, IntentJailbreak},
+		{patterns.CategoryInstructionOverride, IntentInstructionBypass},
+		{patterns.CategoryIndirectCommand, IntentInstructionBypass},
+		{patterns.CategorySocialEngineering, IntentInstructionBypass},
+		{patterns.CategoryOutputSteering, IntentOutputSteering},
+		{patterns.CategoryRoleHijack, IntentJailbreak},
+		{patterns.CategoryResourceExhaustion, IntentResourceExhaust},
+	}
+
+	for _, p := range priority {
+		if _, ok := catSet[p.cat]; ok {
+			return p.intent
+		}
+	}
+
+	return IntentNone
 }
 
 // buildReason generates a human-readable explanation from matched patterns.
