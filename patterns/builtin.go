@@ -14,6 +14,9 @@ const (
 	CategoryIndirectCommand     = "indirect-command"
 	CategorySocialEngineering   = "social-engineering"
 	CategoryStructuralInjection = "structural-injection"
+	CategoryDataDestruction     = "data-destruction"
+	CategoryTransactionCoercion = "transaction-coercion"
+	CategoryOutputSteering      = "output-steering"
 )
 
 // Language constants.
@@ -246,6 +249,66 @@ var allPatterns = []Pattern{
 		CategoryStructuralInjection, 4, LangEN, "HTML comment injection"),
 	p("en-si-002", `\[(system|admin|developer|instruction)\]`,
 		CategoryStructuralInjection, 3, LangEN, "Fake system tags"),
+	p("en-si-003", `\}\}\s*,?\s*"(validation_result|status|approved|result)"\s*:`,
+		CategoryStructuralInjection, 4, LangEN, "JSON context breakout"),
+	p("en-si-004", `<!\[CDATA\[.*?(ignore|disregard|override|forget|instructions)`,
+		CategoryStructuralInjection, 4, LangEN, "CDATA injection"),
+	p("en-si-005", "```(system|assistant|admin)\\b",
+		CategoryStructuralInjection, 3, LangEN, "Markdown fake system block"),
+	p("en-si-006", `<svg[^>]*>.*?(ignore|disregard|override|instructions)`,
+		CategoryStructuralInjection, 3, LangEN, "SVG embedded injection"),
+
+	// =====================================================================
+	// ENGLISH — DATA DESTRUCTION
+	// =====================================================================
+	p("en-dd-001", `\brm\s+-rf\b`,
+		CategoryDataDestruction, 5, LangEN, "Recursive file deletion (rm -rf)"),
+	p("en-dd-002", `\b(DROP|DELETE\s+FROM|TRUNCATE)\s+(TABLE|DATABASE)\b`,
+		CategoryDataDestruction, 5, LangEN, "SQL destructive command"),
+	p("en-dd-003", `:\(\)\{\s*:\|\:&\s*\}\s*;:`,
+		CategoryDataDestruction, 5, LangEN, "Fork bomb"),
+	p("en-dd-004", `\b(delete|destroy|erase|wipe)\s+(your|the|all|my)?\s*(database|data|files?|system|storage|records?)\b`,
+		CategoryDataDestruction, 4, LangEN, "Data destruction command"),
+	p("en-dd-005", `\b(format|fdisk|mkfs)\s+.{0,10}(c\s*:|\/dev\/|disk)`,
+		CategoryDataDestruction, 5, LangEN, "Disk format command"),
+	p("en-dd-006", `\b(shutdown|halt|reboot|poweroff)\s+(-[a-z]+\s+)?(now|immediately|the\s+server)\b`,
+		CategoryDataDestruction, 4, LangEN, "System shutdown command"),
+	p("en-dd-007", `\brmdir\s+\/s\b`,
+		CategoryDataDestruction, 5, LangEN, "Windows recursive directory deletion"),
+	p("en-dd-008", `\bdel\s+\/[fq]\b`,
+		CategoryDataDestruction, 5, LangEN, "Windows force delete"),
+
+	// =====================================================================
+	// ENGLISH — TRANSACTION COERCION
+	// =====================================================================
+	p("en-tc-001", `\b(buy|purchase|order|subscribe)\s+.{0,30}(now|immediately|this|the)\b`,
+		CategoryTransactionCoercion, 3, LangEN, "Purchase coercion"),
+	p("en-tc-002", `\b(send|transfer|wire|donate)\s+\$?\d+`,
+		CategoryTransactionCoercion, 4, LangEN, "Monetary transfer command"),
+	p("en-tc-003", `\b(click|visit|go\s+to|open)\s+.{0,20}(buy|checkout|payment|pay|stripe|paypal)\b`,
+		CategoryTransactionCoercion, 4, LangEN, "Payment link coercion"),
+	p("en-tc-004", `\b(initiate|complete|confirm)\s+(a\s+)?(transaction|payment|purchase|transfer|donation)\b`,
+		CategoryTransactionCoercion, 4, LangEN, "Transaction initiation"),
+	p("en-tc-005", `\b(sign\s+in|log\s+in|authenticate)\s+with\s+(google|github|facebook|apple|oauth)\b`,
+		CategoryTransactionCoercion, 3, LangEN, "OAuth login coercion"),
+	p("en-tc-006", `\b(enter|provide|submit)\s+(your\s+)?(credit\s+card|card\s+number|payment\s+details?|billing)\b`,
+		CategoryTransactionCoercion, 4, LangEN, "Payment credential harvesting"),
+
+	// =====================================================================
+	// ENGLISH — OUTPUT STEERING
+	// =====================================================================
+	p("en-os-001", `\b(always|only)\s+(recommend|suggest|promote|endorse|rank)\b`,
+		CategoryOutputSteering, 3, LangEN, "Forced recommendation"),
+	p("en-os-002", `\b(give|write|generate)\s+(a\s+)?(positive|five[- ]star|glowing|excellent)\s+(review|rating|feedback)\b`,
+		CategoryOutputSteering, 3, LangEN, "Forced positive review"),
+	p("en-os-003", `\b(mark|label|classify|rate)\s+(this|the)\s+(candidate|applicant|submission)\s+as\s+(hired|qualified|approved|excellent)\b`,
+		CategoryOutputSteering, 3, LangEN, "Recruitment manipulation"),
+	p("en-os-004", `\b(approve|accept|validate)\s+(this|the)\s+(content|ad|advertisement|listing|product)\b`,
+		CategoryOutputSteering, 3, LangEN, "Content approval manipulation"),
+	p("en-os-005", `\b(suppress|hide|ignore|remove)\s+(all\s+)?(negative|bad|critical|poor)\s+(reviews?|feedback|comments?|ratings?)\b`,
+		CategoryOutputSteering, 3, LangEN, "Negative feedback suppression"),
+	p("en-os-006", `\brank\s+.{0,20}(as\s+)?(number\s+one|#1|first|top)\b`,
+		CategoryOutputSteering, 3, LangEN, "SEO ranking manipulation"),
 
 	// =====================================================================
 	// FRENCH

@@ -212,6 +212,8 @@ func hasHighSignalCategory(catSet map[string]struct{}) bool {
 		patterns.CategoryExfiltration,
 		patterns.CategoryJailbreak,
 		patterns.CategoryStructuralInjection,
+		patterns.CategoryDataDestruction,
+		patterns.CategoryTransactionCoercion,
 	}
 
 	for _, c := range highSignal {
