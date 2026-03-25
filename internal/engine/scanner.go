@@ -80,7 +80,11 @@ type categoryInfo struct {
 // applyContextPenalties reduces scores when patterns appear in legitimate contexts.
 // This combats false positives from documentation, code examples, and comments.
 func applyContextPenalties(score int, text string, matches []match) int {
-	if len(text) == 0 {
+	if len(text) == 0 || len(matches) == 0 {
+		return score
+	}
+
+	if !isContextPenaltyEligible(matches) {
 		return score
 	}
 
@@ -106,7 +110,7 @@ func applyContextPenalties(score int, text string, matches []match) int {
 
 	for _, marker := range docMarkers {
 		if strings.Contains(lowerText, marker) {
-			penalty += 15 // Reduce by 15 points if in docs
+			penalty += 10
 			break
 		}
 	}
@@ -127,17 +131,9 @@ func applyContextPenalties(score int, text string, matches []match) int {
 	}
 
 	for _, marker := range codeMarkers {
-		if strings.Contains(text, marker) {
-			// Check if the matched pattern is inside a code block
-			matchedIndex := strings.Index(lowerText, matches[0].Matched)
-			if matchedIndex > 0 {
-				// Look backward for code markers
-				contextSnippet := text[maxInt(0, matchedIndex-100):minInt(len(text), matchedIndex+100)]
-				if strings.Contains(contextSnippet, marker) {
-					penalty += 20 // Reduce by 20 points if in code
-					break
-				}
-			}
+		if strings.Contains(lowerText, marker) {
+			penalty += 10
+			break
 		}
 	}
 
@@ -153,15 +149,18 @@ func applyContextPenalties(score int, text string, matches []match) int {
 
 	for _, marker := range legitimateMarkers {
 		if strings.Contains(lowerText, marker) {
-			penalty += 10 // Reduce by 10 points
+			penalty += 5
 			break
 		}
 	}
 
 	// Check if the entire text looks like HTML attributes (e.g., aria-hidden)
 	if strings.Contains(text, "aria-") || strings.Contains(text, "data-") {
-		// XML/HTML attribute contexts are usually not attack vectors
 		penalty += 5
+	}
+
+	if penalty > 20 {
+		penalty = 20
 	}
 
 	// Apply penalty but don't go below 0
@@ -173,19 +172,55 @@ func applyContextPenalties(score int, text string, matches []match) int {
 	return finalScore
 }
 
-// Helper functions for context checking
-func minInt(a, b int) int {
-	if a < b {
-		return a
+// isContextPenaltyEligible determines whether context penalties should apply.
+// Penalties are skipped for multi-category attacks, high-signal categories,
+// and dense severe matches to prevent attackers from gaming the scoring.
+func isContextPenaltyEligible(matches []match) bool {
+	if len(matches) == 0 {
+		return false
 	}
-	return b
+
+	catSet := make(map[string]struct{}, len(matches))
+	maxSeverity := 0
+	for _, m := range matches {
+		catSet[m.Category] = struct{}{}
+		if m.Severity > maxSeverity {
+			maxSeverity = m.Severity
+		}
+	}
+
+	// Do not reduce score for multi-category signals.
+	if len(catSet) > 1 {
+		return false
+	}
+
+	// Do not reduce score for high-signal categories.
+	if hasHighSignalCategory(catSet) {
+		return false
+	}
+
+	// Do not reduce score for dense severe matches.
+	if maxSeverity >= 4 && len(matches) >= 2 {
+		return false
+	}
+
+	return true
 }
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
+func hasHighSignalCategory(catSet map[string]struct{}) bool {
+	highSignal := []string{
+		patterns.CategoryExfiltration,
+		patterns.CategoryJailbreak,
+		patterns.CategoryStructuralInjection,
 	}
-	return b
+
+	for _, c := range highSignal {
+		if _, ok := catSet[c]; ok {
+			return true
+		}
+	}
+
+	return false
 }
 
 // computeScore calculates the final risk score from pattern matches.
