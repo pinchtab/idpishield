@@ -1,0 +1,6 @@
+{
+  "getting-started": "get-started.md",
+  "architecture": "architecture/*",
+  "reference": "reference/*",
+  "guides": "guides/*"
+}
