@@ -247,8 +247,11 @@ var homoglyphMap = map[rune]rune{
 	'\u0443': 'y', // у
 	'\u0455': 's', // ѕ (Macedonian)
 	'\u0458': 'j', // ј (Serbian)
+	'\u04CF': 'l', // ӏ
 	'\u04BB': 'h', // һ
 	'\u0501': 'd', // ԁ
+	'\u0261': 'g', // ɡ
+	'\u028B': 'v', // ʋ
 
 	// Cyrillic uppercase → Latin uppercase
 	'\u0410': 'A', // А
@@ -264,6 +267,8 @@ var homoglyphMap = map[rune]rune{
 	'\u0405': 'S', // Ѕ (Macedonian)
 	'\u0422': 'T', // Т
 	'\u0425': 'X', // Х
+	'\u04C0': 'I', // Ӏ
+	'\u0500': 'D', // Ԁ
 
 	// Greek → Latin
 	'\u03B1': 'a', // α
@@ -271,6 +276,7 @@ var homoglyphMap = map[rune]rune{
 	'\u03B9': 'i', // ι
 	'\u03BF': 'o', // ο
 	'\u03C1': 'p', // ρ (visually similar)
+	'\u03C2': 's', // ς
 	'\u0391': 'A', // Α
 	'\u0392': 'B', // Β
 	'\u0395': 'E', // Ε
