@@ -16,10 +16,32 @@ Core output includes:
 - `blocked` (policy decision based on score + strict mode)
 - matched `patterns` and `categories`
 
-## Install (Go Library)
+## Install
+
+### Go Library
 
 ```bash
 go get github.com/pinchtab/idpishield
+```
+
+### CLI / MCP Server
+
+**Homebrew:**
+
+```bash
+brew install pinchtab/tap/idpishield
+```
+
+**curl:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pinchtab/idpishield/main/install.sh | bash
+```
+
+**Go install:**
+
+```bash
+go install github.com/pinchtab/idpishield/cmd/idpishield@latest
 ```
 
 ## Import

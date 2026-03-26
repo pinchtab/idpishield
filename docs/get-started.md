@@ -26,6 +26,20 @@ func main() {
 
 ## As a CLI
 
+**Homebrew:**
+
+```bash
+brew install pinchtab/tap/idpishield
+```
+
+**curl:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/pinchtab/idpishield/main/install.sh | bash
+```
+
+**Go install:**
+
 ```bash
 go install github.com/pinchtab/idpishield/cmd/idpishield@latest
 ```

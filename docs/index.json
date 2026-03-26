@@ -1,0 +1,19 @@
+{
+  "main": [
+    "get-started.md",
+    "mcp.md"
+  ],
+  "architecture": [
+    "architecture/design.md"
+  ],
+  "guides": [
+    "guides/contributing.md",
+    "guides/security-checklist.md"
+  ],
+  "reference": [
+    "reference/api.md",
+    "reference/levels.md",
+    "reference/patterns.md",
+    "reference/risk-result.md"
+  ]
+}
