@@ -1,4 +1,4 @@
-// cli-scanner demonstrates using the idpi-shield Go library from a small CLI.
+// cli-scanner demonstrates using the idpishield Go library from a small CLI.
 package main
 
 import (

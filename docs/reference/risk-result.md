@@ -7,7 +7,7 @@
 
 ## Overview
 
-`RiskResult` is the single return type for all idpi-shield analysis operations.
+`RiskResult` is the single return type for all idpishield analysis operations.
 Every client library (Go, TypeScript, Rust) and the Python service returns this exact structure.
 
 ## Schema

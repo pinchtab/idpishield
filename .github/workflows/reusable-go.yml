@@ -42,7 +42,7 @@ jobs:
         run: go build ./...
 
       - name: Build CLI
-        run: go build -o idpi-shield ./cmd/idpi-shield
+        run: go build -o idpishield ./cmd/idpishield
 
       - name: Test with coverage
         run: go test ./... -v -count=1 -race -coverprofile=coverage.out -covermode=atomic

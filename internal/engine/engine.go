@@ -1,4 +1,4 @@
-// Package engine implements the core analysis pipeline for idpi-shield.
+// Package engine implements the core analysis pipeline for idpishield.
 // It is internal to the module — consumers use the root idpishield package.
 package engine
 

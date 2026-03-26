@@ -1,7 +1,7 @@
-﻿# Manual Test Results - idpi-shield
+﻿# Manual Test Results - idpishield
 
 Generated: 2026-03-17 22:23:32 +05:30
-Repository: C:\Degree Yash\SEM 6\SBP\idpi-shield
+Repository: C:\Degree Yash\SEM 6\SBP\idpishield
 
 ## Summary
 
@@ -25,7 +25,7 @@ Repository: C:\Degree Yash\SEM 6\SBP\idpi-shield
 
 ## MCP Implementation Notes
 
-- Subcommand: idpi-shield mcp serve
+- Subcommand: idpishield mcp serve
 - SDK: github.com/mark3labs/mcp-go v0.45.0
 - Exposed tool: idpi_assess
 - Tool params: text (required), mode (optional: fast|balanced|deep)

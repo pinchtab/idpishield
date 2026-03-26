@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "Cross-language conformance test vectors for idpi-shield. All client implementations must pass these tests.",
+  "description": "Cross-language conformance test vectors for idpishield. All client implementations must pass these tests.",
   "vectors": [
     {
       "id": "clean-001",

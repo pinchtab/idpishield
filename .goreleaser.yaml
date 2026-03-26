@@ -1,7 +1,7 @@
 version: 2
 
 builds:
-  - main: ./cmd/idpi-shield
+  - main: ./cmd/idpishield
     ldflags:
       - -s -w -X main.version={{.Version}}
     goos:
@@ -14,13 +14,13 @@ builds:
 
 archives:
   - format: binary
-    name_template: "idpi-shield-{{ .Os }}-{{ .Arch }}"
+    name_template: "idpishield-{{ .Os }}-{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt
 
 brews:
-  - name: idpi-shield
+  - name: idpishield
     repository:
       owner: pinchtab
       name: homebrew-tap
@@ -37,9 +37,9 @@ brews:
     description: "Defense against Indirect Prompt Injection (IDPI) attacks for AI agents"
     license: "MIT"
     test: |
-      system "#{bin}/idpi-shield", "help"
+      system "#{bin}/idpishield", "help"
     install: |
-      bin.install Dir["idpi-shield*"].first => "idpi-shield"
+      bin.install Dir["idpishield*"].first => "idpishield"
 
 changelog:
   sort: asc

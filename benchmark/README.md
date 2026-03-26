@@ -8,7 +8,7 @@ A repeatable security benchmarking system for PinchTab's **IDPI (Indirect Prompt
 
 - [What This Does](#what-this-does)
 - [Architecture Overview](#architecture-overview)
-- [How the IDPI Shield Works](#how-the-idpi-shield-works)
+- [How the IDPI Shield Works](#how-the-idpishield-works)
 - [Dataset Structure](#dataset-structure)
 - [Sample Format](#sample-format)
 - [Malicious Content Categories](#malicious-content-categories)

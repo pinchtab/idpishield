@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// serviceClient communicates with the idpi-shield Python service (Tier 2).
+// serviceClient communicates with the idpishield Python service (Tier 2).
 // Handles HTTP transport, serialization, timeouts, and graceful fallback.
 type serviceClient struct {
 	baseURL          string

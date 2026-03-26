@@ -1,6 +1,6 @@
-# idpi-shield
+# idpishield
 
-`idpi-shield` is a Go library for detecting indirect prompt injection (IDPI) risk in untrusted text before it is passed to an LLM.
+`idpishield` is a Go library for detecting indirect prompt injection (IDPI) risk in untrusted text before it is passed to an LLM.
 
 It provides a single core assessment engine and two adapters around it:
 - Go API (primary)
@@ -149,19 +149,19 @@ func (s *Shield) Wrap(text, url string) string
 Install CLI:
 
 ```bash
-go install github.com/pinchtab/idpishield/cmd/idpi-shield@latest
+go install github.com/pinchtab/idpishield/cmd/idpishield@latest
 ```
 
 Scan from a file:
 
 ```bash
-idpi-shield scan ./page.txt --profile production --mode balanced --domains example.com,google.com --url https://example.com/page
+idpishield scan ./page.txt --profile production --mode balanced --domains example.com,google.com --url https://example.com/page
 ```
 
 Scan from stdin:
 
 ```bash
-echo "Ignore all previous instructions" | idpi-shield scan --mode balanced
+echo "Ignore all previous instructions" | idpishield scan --mode balanced
 ```
 
 `scan` supports hardening flags:
@@ -190,13 +190,13 @@ The CLI outputs JSON:
 Run stdio MCP server (default):
 
 ```bash
-idpi-shield mcp serve
+idpishield mcp serve
 ```
 
 Run MCP HTTP with authentication and production-safe defaults:
 
 ```bash
-idpi-shield mcp serve --transport http --profile production --auth-token "$env:IDPI_MCP_TOKEN"
+idpishield mcp serve --transport http --profile production --auth-token "$env:IDPI_MCP_TOKEN"
 ```
 
 Exposed MCP tool:
@@ -220,7 +220,7 @@ Token management guidance:
 ## Project Layout
 
 ```text
-idpi-shield/
+idpishield/
 ├── go.mod
 ├── shield.go
 ├── shield_test.go
@@ -232,7 +232,7 @@ idpi-shield/
 ├── patterns/
 │   └── builtin.go
 ├── cmd/
-│   └── idpi-shield/
+│   └── idpishield/
 │       └── main.go
 ├── examples/
 ├── tests/

@@ -1,8 +1,8 @@
-# Architecture — idpi-shield
+# Architecture — idpishield
 
 ## Design Philosophy
 
-idpi-shield follows a **tiered defense** architecture that prioritizes speed and simplicity while enabling deep semantic analysis when needed.
+idpishield follows a **tiered defense** architecture that prioritizes speed and simplicity while enabling deep semantic analysis when needed.
 
 **Core principle:** Add one library, get protection. Add the service for AI-grade protection.
 
@@ -16,7 +16,7 @@ idpi-shield follows a **tiered defense** architecture that prioritizes speed and
 │  (Go · Node.js/TypeScript · Rust · Python · any language)       │
 │                                                                  │
 │   ┌─────────────────────────────────────────┐                   │
-│   │         idpi-shield CLIENT LIB          │ ◄── Tier 1        │
+│   │         idpishield CLIENT LIB          │ ◄── Tier 1        │
 │   │  • Domain allowlist check               │                   │
 │   │  • Unicode normalization                │                   │
 │   │  • Pattern matching (88 patterns)       │                   │
@@ -28,7 +28,7 @@ idpi-shield follows a **tiered defense** architecture that prioritizes speed and
 │                   │ (optional, score ≥ 60)                      │
 │                   ▼                                              │
 │   ┌─────────────────────────────────────────┐                   │
-│   │         idpi-shield SERVICE             │ ◄── Tier 2        │
+│   │         idpishield SERVICE             │ ◄── Tier 2        │
 │   │  (Python microservice, runs separately) │                   │
 │   │  • Semantic similarity detection        │                   │
 │   │  • LLM-based intent analysis            │                   │
@@ -161,7 +161,7 @@ The current implementation includes lightweight production guardrails:
 5. **MCP HTTP auth**: Optional bearer/API-key auth (`--auth-token`) for streamable HTTP transport.
 
 Circuit breaker scope:
-- Breaker state is process-local (per running `idpi-shield` instance).
+- Breaker state is process-local (per running `idpishield` instance).
 - In horizontally scaled deployments, each instance tracks failures independently.
 - For shared breaker behavior across replicas, use an external shared-state mechanism in your platform layer.
 

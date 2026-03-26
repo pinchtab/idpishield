@@ -4,7 +4,7 @@
 // when processing untrusted web content. The library operates in tiers:
 //
 //   - Tier 1 (library only): Fast local pattern matching with zero infrastructure.
-//   - Tier 2 (library + service): Adds semantic analysis via the idpi-shield Python service.
+//   - Tier 2 (library + service): Adds semantic analysis via the idpishield Python service.
 //
 // Basic usage:
 //
@@ -41,9 +41,24 @@ const (
 	ModeDeep = types.ModeDeep
 )
 
-// RiskResult is the canonical return type for all idpi-shield analysis operations.
+// RiskResult is the canonical return type for all idpishield analysis operations.
 // Every client library and the service returns this exact structure.
 type RiskResult = types.RiskResult
+
+// Intent classifies the attacker's primary goal.
+type Intent = types.Intent
+
+const (
+	IntentNone              = types.IntentNone
+	IntentInstructionBypass = types.IntentInstructionBypass
+	IntentDataExfiltration  = types.IntentDataExfiltration
+	IntentDataDestruction   = types.IntentDataDestruction
+	IntentUnauthorizedTx    = types.IntentUnauthorizedTx
+	IntentJailbreak         = types.IntentJailbreak
+	IntentOutputSteering    = types.IntentOutputSteering
+	IntentSystemCompromise  = types.IntentSystemCompromise
+	IntentResourceExhaust   = types.IntentResourceExhaust
+)
 
 // --- Public types ---
 
@@ -60,7 +75,7 @@ type Config struct {
 	// StrictMode lowers blocking thresholds (score >= 40 blocks instead of >= 60).
 	StrictMode bool
 
-	// ServiceURL is the URL of the idpi-shield analysis service.
+	// ServiceURL is the URL of the idpishield analysis service.
 	// Only used in deep mode. Example: "http://localhost:7432"
 	ServiceURL string
 
@@ -93,7 +108,7 @@ type Config struct {
 	MaxDecodedVariants int
 }
 
-// Shield is the main entry point for idpi-shield analysis.
+// Shield is the main entry point for idpishield analysis.
 // Safe for concurrent use by multiple goroutines.
 type Shield struct {
 	engine *engine.Engine

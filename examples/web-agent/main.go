@@ -1,10 +1,10 @@
-// web-agent: Simulates an AI agent that fetches web pages and uses idpi-shield
+// web-agent: Simulates an AI agent that fetches web pages and uses idpishield
 // to scan content before processing it. This is the exact real-world threat model
-// idpi-shield is designed for.
+// idpishield is designed for.
 //
 // The agent:
 //  1. Fetches the URL
-//  2. Runs idpi-shield scan on the page content
+//  2. Runs idpishield scan on the page content
 //  3. If safe: "passes to AI" (simulated) using Wrap() for safe context boundary
 //  4. If threat: blocks and explains why
 //
@@ -57,7 +57,7 @@ func main() {
 		fmt.Println("IDPI Shield — AI Web Agent Simulator")
 		fmt.Println("=====================================")
 		fmt.Println("This simulates an AI agent that reads web pages.")
-		fmt.Println("idpi-shield scans every page BEFORE the AI sees it.")
+		fmt.Println("idpishield scans every page BEFORE the AI sees it.")
 		fmt.Println()
 		fmt.Println("Usage:")
 		fmt.Println("  go run main.go -url https://example.com")
@@ -99,8 +99,8 @@ func processURL(client *idpi.Shield, url string) {
 	fmt.Printf("  %s✓ Fetched %d chars%s\n", green, runeCount, reset)
 	fmt.Println()
 
-	// Step 3: Scan with idpi-shield
-	fmt.Printf("%s[Step 3]%s Scanning with idpi-shield...\n", cyan+bold, reset)
+	// Step 3: Scan with idpishield
+	fmt.Printf("%s[Step 3]%s Scanning with idpishield...\n", cyan+bold, reset)
 	start := time.Now()
 	result := client.Assess(content, url)
 	elapsed := time.Since(start)
@@ -275,7 +275,7 @@ Here are my top 5 tips for getting more done each day:
 
 	fmt.Println()
 	fmt.Printf("%s═══════════════════════════════════════════════════════%s\n", bold, reset)
-	fmt.Printf("%s  Demo complete. idpi-shield blocked 2/3 scenarios.     %s\n", green+bold, reset)
+	fmt.Printf("%s  Demo complete. idpishield blocked 2/3 scenarios.     %s\n", green+bold, reset)
 	fmt.Printf("%s═══════════════════════════════════════════════════════%s\n", bold, reset)
 	fmt.Println()
 }

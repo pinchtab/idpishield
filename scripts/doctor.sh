@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# doctor.sh — Verify and setup development environment for idpi-shield
+# doctor.sh — Verify and setup development environment for idpishield
 # Interactive: asks before installing anything
 
 BOLD='\033[1m'

@@ -1,7 +1,7 @@
-# MCP Manual QA Draft - idpi-shield
+# MCP Manual QA Draft - idpishield
 
 ## Scope
-This draft captures manual QA coverage for the implemented CLI and MCP support in idpi-shield.
+This draft captures manual QA coverage for the implemented CLI and MCP support in idpishield.
 
 Covered areas:
 - Core package verification
@@ -26,8 +26,8 @@ Generated: 2026-03-17 22:23:32 +05:30
 ## Result Table
 | ID | Test | Status | Notes |
 |---|---|---|---|
-| MT-001 | Go unit tests (core packages) | PASS | go test . ./cmd/idpi-shield ./patterns |
-| MT-002 | CLI build | PASS | go build ./cmd/idpi-shield |
+| MT-001 | Go unit tests (core packages) | PASS | go test . ./cmd/idpishield ./patterns |
+| MT-002 | CLI build | PASS | go build ./cmd/idpishield |
 | MT-003 | CLI help shows scan and mcp | PASS | help output includes scan and mcp commands |
 | MT-004 | Safe scan result | PASS | blocked=false for normal input |
 | MT-005 | Malicious scan result | PASS | blocked=true with strict mode |
@@ -37,7 +37,7 @@ Generated: 2026-03-17 22:23:32 +05:30
 | MT-009 | Manual tool call via MCP Inspector | PENDING | execute live tool call validation |
 
 ## MCP Implementation Notes
-- Subcommand added: idpi-shield mcp serve
+- Subcommand added: idpishield mcp serve
 - Library used: github.com/mark3labs/mcp-go v0.45.0
 - Exposed tool count: 1
 - Tool name: idpi_assess

@@ -113,7 +113,7 @@ func runMCPServe(args []string) error {
 	}
 
 	s := server.NewMCPServer(
-		"idpi-shield",
+		"idpishield",
 		"0.1.0",
 		server.WithToolCapabilities(false),
 		server.WithRecovery(),
@@ -282,11 +282,11 @@ func parseDomains(raw string) []string {
 
 //nolint:errcheck // usage output — errors are not actionable
 func printUsage(w io.Writer) {
-	fmt.Fprintln(w, "idpi-shield CLI")
+	fmt.Fprintln(w, "idpishield CLI")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  idpi-shield scan [file|-] --mode balanced --domains example.com,google.com")
-	fmt.Fprintln(w, "  idpi-shield mcp serve [--transport stdio|http] [flags]")
+	fmt.Fprintln(w, "  idpishield scan [file|-] --mode balanced --domains example.com,google.com")
+	fmt.Fprintln(w, "  idpishield mcp serve [--transport stdio|http] [flags]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  scan    Assess input from file path or stdin and emit JSON risk result")
@@ -309,11 +309,11 @@ func printUsage(w io.Writer) {
 
 //nolint:errcheck // usage output — errors are not actionable
 func printMCPUsage(w io.Writer) {
-	fmt.Fprintln(w, "idpi-shield mcp serve")
+	fmt.Fprintln(w, "idpishield mcp serve")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
-	fmt.Fprintln(w, "  idpi-shield mcp serve --transport stdio")
-	fmt.Fprintln(w, "  idpi-shield mcp serve --transport http --host 127.0.0.1 --port 8081 --endpoint /mcp")
+	fmt.Fprintln(w, "  idpishield mcp serve --transport stdio")
+	fmt.Fprintln(w, "  idpishield mcp serve --transport http --host 127.0.0.1 --port 8081 --endpoint /mcp")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Exposed tool:")
 	fmt.Fprintln(w, "  idpi_assess(text: string, mode?: fast|balanced|deep)")
@@ -389,7 +389,7 @@ func withBearerAuth(next http.Handler, token string) http.Handler {
 		}
 
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(cleanToken)) != 1 {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="idpi-shield-mcp"`)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="idpishield-mcp"`)
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}

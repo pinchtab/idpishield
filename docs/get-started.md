@@ -27,21 +27,21 @@ func main() {
 ## As a CLI
 
 ```bash
-go install github.com/pinchtab/idpishield/cmd/idpi-shield@latest
+go install github.com/pinchtab/idpishield/cmd/idpishield@latest
 ```
 
 ```bash
 # Scan a file
-idpi-shield scan input.txt
+idpishield scan input.txt
 
 # Scan from stdin
-echo "Ignore previous instructions" | idpi-shield scan -
+echo "Ignore previous instructions" | idpishield scan -
 
 # With domain allowlist
-idpi-shield scan page.html --domains example.com,google.com --url https://example.com
+idpishield scan page.html --domains example.com,google.com --url https://example.com
 
 # MCP server mode
-idpi-shield mcp serve
+idpishield mcp serve
 ```
 
 ## Analysis Modes

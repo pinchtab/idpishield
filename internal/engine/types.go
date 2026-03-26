@@ -12,6 +12,19 @@ const (
 )
 
 type RiskResult = types.RiskResult
+type Intent = types.Intent
+
+const (
+	IntentNone              = types.IntentNone
+	IntentInstructionBypass = types.IntentInstructionBypass
+	IntentDataExfiltration  = types.IntentDataExfiltration
+	IntentDataDestruction   = types.IntentDataDestruction
+	IntentUnauthorizedTx    = types.IntentUnauthorizedTx
+	IntentJailbreak         = types.IntentJailbreak
+	IntentOutputSteering    = types.IntentOutputSteering
+	IntentSystemCompromise  = types.IntentSystemCompromise
+	IntentResourceExhaust   = types.IntentResourceExhaust
+)
 
 var (
 	ParseMode       = types.ParseMode

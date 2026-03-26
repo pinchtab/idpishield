@@ -1,4 +1,4 @@
-# Contributing to idpi-shield
+# Contributing to idpishield
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ cd idpishield
 idpishield.go              Public API (thin wrapper)
 internal/engine/           Implementation (scanner, normalizer, decoders, etc.)
 patterns/                  Detection patterns (public — consumers can inspect)
-cmd/idpi-shield/           CLI entry point
+cmd/idpishield/           CLI entry point
 benchmark/                 Benchmark suite
 docs/                      Documentation
 tests/                     Integration & compliance tests

@@ -1,9 +1,9 @@
-// http-middleware: A real HTTP API server that uses idpi-shield as middleware
+// http-middleware: A real HTTP API server that uses idpishield as middleware
 // to protect an AI endpoint from prompt injection attacks.
 //
 // Endpoints:
 //
-//	POST /ai/ask        — Protected AI endpoint (scanned by idpi-shield)
+//	POST /ai/ask        — Protected AI endpoint (scanned by idpishield)
 //	POST /ai/ask-raw    — Unprotected endpoint for comparison
 //	GET  /health        — Health check
 //	GET  /stats         — Live scan statistics
@@ -101,7 +101,7 @@ func main() {
 	fmt.Printf("├────────────────────────────────────────────────────┤\n")
 	fmt.Printf("│   Listening on http://localhost%s              │\n", padRight(addr, 21))
 	fmt.Printf("│                                                    │\n")
-	fmt.Printf("│   POST /ai/ask       ← PROTECTED by idpi-shield   │\n")
+	fmt.Printf("│   POST /ai/ask       ← PROTECTED by idpishield   │\n")
 	fmt.Printf("│   POST /ai/ask-raw   ← Unprotected (for comparison│\n")
 	fmt.Printf("│   GET  /health       ← Health check               │\n")
 	fmt.Printf("│   GET  /stats        ← Live scan statistics        │\n")
@@ -118,7 +118,7 @@ func main() {
 // Middleware
 // ─────────────────────────────────────────────────────────────────────────────
 
-// idpiMiddleware wraps an HTTP handler with idpi-shield scanning.
+// idpiMiddleware wraps an HTTP handler with idpishield scanning.
 // If the request message is a threat, it returns 422 with the risk result.
 // Otherwise, attaches the scan result to the request context.
 func (s *server) idpiMiddleware(next http.HandlerFunc) http.HandlerFunc {
@@ -145,7 +145,7 @@ func (s *server) idpiMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		// Run idpi-shield scan
+		// Run idpishield scan
 		s.totalRequests.Add(1)
 		result := s.client.Assess(req.Message, req.URL)
 
@@ -190,7 +190,7 @@ func (s *server) idpiMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-// handleAsk simulates an AI endpoint protected by idpi-shield middleware.
+// handleAsk simulates an AI endpoint protected by idpishield middleware.
 func (s *server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	var req AskRequest
@@ -200,7 +200,7 @@ func (s *server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	aiAnswer := simulateAI(req.Message)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("X-Protected-By", "idpi-shield")
+	w.Header().Set("X-Protected-By", "idpishield")
 	_ = json.NewEncoder(w).Encode(AskResponse{
 		Answer:      aiAnswer,
 		Blocked:     false,
