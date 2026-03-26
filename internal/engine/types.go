@@ -24,6 +24,7 @@ const (
 	IntentOutputSteering    = types.IntentOutputSteering
 	IntentSystemCompromise  = types.IntentSystemCompromise
 	IntentResourceExhaust   = types.IntentResourceExhaust
+	IntentAgentHijacking    = types.IntentAgentHijacking
 )
 
 var (

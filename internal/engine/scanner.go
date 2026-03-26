@@ -214,6 +214,7 @@ func hasHighSignalCategory(catSet map[string]struct{}) bool {
 		patterns.CategoryStructuralInjection,
 		patterns.CategoryDataDestruction,
 		patterns.CategoryTransactionCoercion,
+		patterns.CategoryAgentHijacking,
 	}
 
 	for _, c := range highSignal {
@@ -284,6 +285,12 @@ func computeScore(matches []match) int {
 	}
 	if hasCategory(patterns.CategoryRoleHijack) && hasCategory(patterns.CategoryExfiltration) {
 		score += 15 // hijack role then exfiltrate data
+	}
+	if hasCategory(patterns.CategoryAgentHijacking) && hasCategory(patterns.CategoryExfiltration) {
+		score += 20 // hijack agent workflow then steal data
+	}
+	if hasCategory(patterns.CategoryAgentHijacking) && hasCategory(patterns.CategoryDataDestruction) {
+		score += 20 // hijack agent then destroy data
 	}
 
 	if score > 100 {
@@ -357,6 +364,7 @@ func deriveIntent(categories []string) Intent {
 		{patterns.CategoryDataDestruction, IntentDataDestruction},
 		{patterns.CategoryExfiltration, IntentDataExfiltration},
 		{patterns.CategoryTransactionCoercion, IntentUnauthorizedTx},
+		{patterns.CategoryAgentHijacking, IntentAgentHijacking},
 		{patterns.CategoryStructuralInjection, IntentSystemCompromise},
 		{patterns.CategoryJailbreak, IntentJailbreak},
 		{patterns.CategoryInstructionOverride, IntentInstructionBypass},
@@ -365,6 +373,7 @@ func deriveIntent(categories []string) Intent {
 		{patterns.CategoryOutputSteering, IntentOutputSteering},
 		{patterns.CategoryRoleHijack, IntentJailbreak},
 		{patterns.CategoryResourceExhaustion, IntentResourceExhaust},
+		{patterns.CategoryAgentHijacking, IntentAgentHijacking},
 	}
 
 	for _, p := range priority {

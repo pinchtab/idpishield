@@ -18,6 +18,7 @@ const (
 	CategoryTransactionCoercion = "transaction-coercion"
 	CategoryOutputSteering      = "output-steering"
 	CategoryResourceExhaustion  = "resource-exhaustion"
+	CategoryAgentHijacking      = "agent-hijacking"
 )
 
 // Language constants.
@@ -324,6 +325,58 @@ var allPatterns = []Pattern{
 		CategoryResourceExhaustion, 2, LangEN, "Output flooding"),
 	p("en-re-005", `\b(maximum|max|longest)\s+(possible\s+)?(response|output|reply|answer)\b`,
 		CategoryResourceExhaustion, 1, LangEN, "Maximum output request"),
+
+	// =====================================================================
+	// ENGLISH — AGENT HIJACKING
+	// =====================================================================
+
+	// --- Deferred execution / Persistence attacks ---
+	p("en-ah-001", `\b(from\s+now\s+on|going\s+forward|henceforth)\s*,?\s*(always|every\s+time|whenever)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Persistent behavioral override"),
+	p("en-ah-002", `\b(remember|memorize|store|save)\s+(this|that|the\s+following)\s+(for|and)\s+(later|future|next|all)\b`,
+		CategoryAgentHijacking, 3, LangEN, "Deferred memory injection"),
+	p("en-ah-003", `\bnext\s+time\s+(you|the\s+(user|agent|assistant))\s+(are|is)?\s*(asked|prompted|called|invoked|run)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Deferred execution trigger"),
+	p("en-ah-004", `\bwhenever\s+(you|the\s+(user|agent|assistant))\s+(are|is)?\s*(asked|prompted|called|invoked|run|receive)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Persistent conditional trigger"),
+	p("en-ah-005", `\b(in\s+every|in\s+all|for\s+all)\s+(future|subsequent|following)\s+(response|reply|message|interaction|session|request)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Persistent response override"),
+	p("en-ah-006", `\b(always|permanently|forever)\s+(include|append|prepend|add|insert)\s+.{0,30}(in|to|at)\s+(every|all|each|your)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Persistent output injection"),
+	p("en-ah-007", `\b(before|after)\s+(every|each|all)\s+(response|reply|message|answer|output)\b`,
+		CategoryAgentHijacking, 3, LangEN, "Response hook injection"),
+
+	// --- Tool / Function call injection ---
+	p("en-ah-008", `\b(call|invoke|execute|run|trigger)\s+(the\s+)?(function|tool|api|endpoint|method|action)\s*[\(:]`,
+		CategoryAgentHijacking, 4, LangEN, "Tool invocation injection"),
+	p("en-ah-009", `\b(send_email|send_message|create_file|delete_file|write_file|run_command|execute_command|make_request|http_request)\s*\(`,
+		CategoryAgentHijacking, 5, LangEN, "Dangerous function call pattern"),
+	p("en-ah-010", `\buse\s+the\s+\w+\s+tool\s+to\s+(send|delete|create|modify|execute|write|post|upload)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Tool abuse directive"),
+	p("en-ah-011", `\{"(function|tool|action|method)"\s*:\s*"`,
+		CategoryAgentHijacking, 4, LangEN, "JSON function call injection"),
+	p("en-ah-012", `\b(call|use)\s+(the\s+)?\w+\s*(tool|function|api)\s+with\s+(these|the\s+following)\s+(parameters?|arguments?|args)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Parameterized tool injection"),
+
+	// --- Workflow / context hijacking ---
+	p("en-ah-013", `\b(silently|quietly|secretly|without\s+(telling|informing|notifying|mentioning))\s+(the\s+user)?\s*(do|perform|execute|run|send|call|invoke)\b`,
+		CategoryAgentHijacking, 5, LangEN, "Stealth action directive"),
+	p("en-ah-014", `\bdo\s+not\s+(tell|inform|notify|alert|mention\s+to)\s+(the\s+)?(user|human|operator|caller)\b`,
+		CategoryAgentHijacking, 5, LangEN, "User notification suppression"),
+	p("en-ah-015", `\b(hide|conceal|suppress|omit)\s+(this|the|your)\s+(action|operation|step|call|request)\s+(from|in)\b`,
+		CategoryAgentHijacking, 5, LangEN, "Action concealment"),
+	p("en-ah-016", `\b(override|replace|modify)\s+(the\s+)?(system|original|default)\s+(prompt|context|instructions?|behavior)\s+(with|to)\b`,
+		CategoryAgentHijacking, 4, LangEN, "System context override"),
+	p("en-ah-017", `\b(inject|insert|embed|plant)\s+(this|the\s+following|a)\s+(into|in)\s+(the\s+)?(context|prompt|memory|conversation|history|session)\b`,
+		CategoryAgentHijacking, 5, LangEN, "Context injection"),
+	p("en-ah-018", `\b(when|if)\s+(the\s+)?(user|human)\s+(asks?|says?|types?|requests?|mentions?)\s+.{0,30}(respond|reply|answer|say|tell)\b`,
+		CategoryAgentHijacking, 3, LangEN, "Conditional response hijack"),
+
+	// --- Multi-step / chain attacks ---
+	p("en-ah-019", `\bfirst\s+.{0,40}then\s+.{0,40}(finally|lastly|after\s+that)\s+(send|post|upload|exfiltrate|delete|execute)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Multi-step attack chain"),
+	p("en-ah-020", `\b(after|once)\s+(completing|finishing|doing)\s+(the|this|that|your)\s+.{0,20}(also|then|next|proceed\s+to)\s+(send|post|call|execute|delete|run|upload|forward)\b`,
+		CategoryAgentHijacking, 4, LangEN, "Post-task piggyback attack"),
 
 	// =====================================================================
 	// FRENCH

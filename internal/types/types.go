@@ -78,6 +78,7 @@ const (
 	IntentOutputSteering    Intent = "output-steering"
 	IntentSystemCompromise  Intent = "system-compromise"
 	IntentResourceExhaust   Intent = "resource-exhaustion"
+	IntentAgentHijacking    Intent = "agent-hijacking"
 )
 
 // RiskResult is the canonical return type for all idpishield analysis operations.
