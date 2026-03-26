@@ -14,6 +14,7 @@ type Config struct {
 	Mode                           Mode
 	AllowedDomains                 []string
 	StrictMode                     bool
+	BlockThreshold                 int
 	ServiceURL                     string
 	ServiceTimeout                 time.Duration
 	ServiceRetries                 int
@@ -93,12 +94,12 @@ func (e *Engine) AssessContext(ctx context.Context, text, sourceURL string) Risk
 	}
 
 	matches := e.scanner.scan(analysisText, e.cfg.MaxDecodeDepth, e.cfg.MaxDecodedVariants)
-	result := buildResult(matches, normalizedText, e.cfg.StrictMode)
+	result := buildResult(matches, normalizedText, e.cfg.StrictMode, e.cfg.BlockThreshold)
 
 	if e.cfg.Mode == ModeDeep && e.service != nil && result.Score >= ThresholdEscalation {
 		serviceResult, err := e.service.assess(ctx, boundedText, sourceURL, e.cfg.Mode.String())
 		if err == nil {
-			serviceResult.Blocked = ShouldBlock(serviceResult.Score, e.cfg.StrictMode)
+			serviceResult.Blocked = ShouldBlock(serviceResult.Score, e.cfg.StrictMode, e.cfg.BlockThreshold)
 			return *serviceResult
 		}
 	}

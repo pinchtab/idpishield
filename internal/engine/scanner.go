@@ -294,7 +294,7 @@ func computeScore(matches []match) int {
 
 // buildResult constructs a RiskResult from scan matches.
 // It applies context-aware scoring to reduce false positives.
-func buildResult(matches []match, text string, strict bool) RiskResult {
+func buildResult(matches []match, text string, strict bool, blockThreshold ...int) RiskResult {
 	if len(matches) == 0 {
 		return SafeResult()
 	}
@@ -305,7 +305,7 @@ func buildResult(matches []match, text string, strict bool) RiskResult {
 	score = applyContextPenalties(score, text, matches)
 
 	level := ScoreToLevel(score)
-	blocked := ShouldBlock(score, strict)
+	blocked := ShouldBlock(score, strict, blockThreshold...)
 
 	// Collect unique pattern IDs
 	patternIDs := make([]string, 0, len(matches))

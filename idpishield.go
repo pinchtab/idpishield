@@ -75,6 +75,11 @@ type Config struct {
 	// StrictMode lowers blocking thresholds (score >= 40 blocks instead of >= 60).
 	StrictMode bool
 
+	// BlockThreshold overrides the score at which content is blocked.
+	// When zero the defaults apply: 40 in strict mode, 60 otherwise.
+	// Must be in range 1–100 to take effect.
+	BlockThreshold int
+
 	// ServiceURL is the URL of the idpishield analysis service.
 	// Only used in deep mode. Example: "http://localhost:7432"
 	ServiceURL string
@@ -190,6 +195,7 @@ func toEngineCfg(cfg Config) engine.Config {
 		Mode:                           cfg.Mode,
 		AllowedDomains:                 cfg.AllowedDomains,
 		StrictMode:                     cfg.StrictMode,
+		BlockThreshold:                 cfg.BlockThreshold,
 		ServiceURL:                     cfg.ServiceURL,
 		ServiceTimeout:                 cfg.ServiceTimeout,
 		ServiceRetries:                 cfg.ServiceRetries,

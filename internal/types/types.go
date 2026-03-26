@@ -122,11 +122,16 @@ func ScoreToLevel(score int) string {
 }
 
 // ShouldBlock determines whether content should be blocked given a score and config.
-func ShouldBlock(score int, strict bool) bool {
+// A custom threshold (1–100) overrides the defaults when non-zero.
+func ShouldBlock(score int, strict bool, customThreshold ...int) bool {
+	threshold := 60
 	if strict {
-		return score >= 40
+		threshold = 40
 	}
-	return score >= 60
+	if len(customThreshold) > 0 && customThreshold[0] >= 1 && customThreshold[0] <= 100 {
+		threshold = customThreshold[0]
+	}
+	return score >= threshold
 }
 
 // SafeResult returns a clean RiskResult with no threats detected.
