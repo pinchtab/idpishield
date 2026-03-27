@@ -87,14 +87,15 @@ func (e *Engine) AssessContext(ctx context.Context, text, sourceURL string) Risk
 
 	analysisText := boundedText
 	normalizedText := ""
+	normSignals := normalizationSignals{}
 
 	if e.cfg.Mode != ModeFast {
-		normalizedText = e.normalizer.Normalize(boundedText)
+		normalizedText, normSignals = e.normalizer.NormalizeWithSignals(boundedText)
 		analysisText = normalizedText
 	}
 
 	matches := e.scanner.scan(analysisText, e.cfg.MaxDecodeDepth, e.cfg.MaxDecodedVariants)
-	result := buildResult(matches, normalizedText, e.cfg.StrictMode, e.cfg.BlockThreshold)
+	result := buildResultWithSignals(matches, normalizedText, normSignals, e.cfg.StrictMode, e.cfg.BlockThreshold)
 
 	if e.cfg.Mode == ModeDeep && e.service != nil && result.Score >= ThresholdEscalation {
 		serviceResult, err := e.service.assess(ctx, boundedText, sourceURL, e.cfg.Mode.String())

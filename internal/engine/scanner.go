@@ -71,6 +71,12 @@ func (s *scanner) scan(text string, maxDecodeDepth, maxDecodedVariants int) []ma
 // severityWeight maps severity level (1–5) to a score contribution.
 var severityWeight = [6]int{0, 10, 15, 25, 35, 45}
 
+const hiddenHTMLContentScoreBoost = 25
+const hiddenInstructionLikeHTMLScoreBoost = 20
+const attributeInjectionScoreBoost = 30
+const attributeInstructionLikeScoreBoost = 15
+const attributeInstructionLikeMinScore = 70
+
 // categoryInfo tracks pattern match statistics per category.
 type categoryInfo struct {
 	maxSeverity int
@@ -302,6 +308,11 @@ func computeScore(matches []match) int {
 // buildResult constructs a RiskResult from scan matches.
 // It applies context-aware scoring to reduce false positives.
 func buildResult(matches []match, text string, strict bool, blockThreshold ...int) RiskResult {
+	return buildResultWithSignals(matches, text, normalizationSignals{}, strict, blockThreshold...)
+}
+
+// buildResultWithSignals is buildResult plus optional normalization signals.
+func buildResultWithSignals(matches []match, text string, signals normalizationSignals, strict bool, blockThreshold ...int) RiskResult {
 	if len(matches) == 0 {
 		return SafeResult()
 	}
@@ -310,6 +321,26 @@ func buildResult(matches []match, text string, strict bool, blockThreshold ...in
 
 	// Apply context-aware scoring to reduce false positives
 	score = applyContextPenalties(score, text, matches)
+
+	if signals.HiddenHTMLContent {
+		score += hiddenHTMLContentScoreBoost
+	}
+
+	if signals.HiddenInstructionLikeHTML {
+		score += hiddenInstructionLikeHTMLScoreBoost
+	}
+
+	if signals.AttributeInjection {
+		score += attributeInjectionScoreBoost
+		score += attributeInstructionLikeScoreBoost
+		if score < attributeInstructionLikeMinScore {
+			score = attributeInstructionLikeMinScore
+		}
+	}
+
+	if score > 100 {
+		score = 100
+	}
 
 	level := ScoreToLevel(score)
 	blocked := ShouldBlock(score, strict, blockThreshold...)
@@ -332,6 +363,12 @@ func buildResult(matches []match, text string, strict bool, blockThreshold ...in
 	sort.Strings(categories) // deterministic output
 
 	reason := buildReason(matches, catSet)
+	if signals.HiddenHTMLContent {
+		reason += "; hidden HTML injection detected"
+	}
+	if signals.AttributeInjection {
+		reason += "; attribute-based injection detected"
+	}
 
 	return RiskResult{
 		Score:      score,
