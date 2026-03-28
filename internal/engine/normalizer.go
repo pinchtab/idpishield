@@ -14,12 +14,8 @@ import (
 type normalizer struct{}
 
 type normalizationSignals struct {
-	HiddenHTMLContent            bool
 	HiddenInstructionLikeHTML    bool
-	HasAttributeText             bool
 	InstructionLikeAttributeText bool
-	// Deprecated compatibility alias. Mirrors InstructionLikeAttributeText.
-	AttributeInjection bool
 }
 
 func newNormalizer() *normalizer {
@@ -47,11 +43,8 @@ func (n *normalizer) NormalizeWithSignals(text string) (string, normalizationSig
 		extracted, htmlSignals, ok := extractHTMLContent(text)
 		if ok {
 			source = extracted
-			signals.HiddenHTMLContent = htmlSignals.HiddenHTMLContent
 			signals.HiddenInstructionLikeHTML = htmlSignals.HiddenInstructionLikeHTML
-			signals.HasAttributeText = htmlSignals.HasAttributeText
 			signals.InstructionLikeAttributeText = htmlSignals.InstructionLikeAttributeText
-			signals.AttributeInjection = htmlSignals.AttributeInjection
 		}
 	}
 

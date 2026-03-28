@@ -50,11 +50,8 @@ func extractHTMLContent(input string) (combined string, signals normalizationSig
 
 	hiddenJoined := strings.Join(state.hiddenText, "\n")
 	attrJoined := strings.Join(state.attrs, "\n")
-	signals.HiddenHTMLContent = len(state.hiddenText) > 0
 	signals.HiddenInstructionLikeHTML = instructionLikeHTMLPattern.MatchString(hiddenJoined)
-	signals.HasAttributeText = len(state.attrs) > 0
 	signals.InstructionLikeAttributeText = instructionLikeHTMLPattern.MatchString(attrJoined)
-	signals.AttributeInjection = signals.InstructionLikeAttributeText
 
 	if combined == "" {
 		return "", signals, false
@@ -122,6 +119,8 @@ func extractElementAttrs(node *html.Node, state *htmlExtractionState) {
 		return
 	}
 
+	const maxExtractedAttrLen = 512
+
 	tag := strings.ToLower(node.Data)
 	for _, attr := range node.Attr {
 		key := strings.ToLower(attr.Key)
@@ -129,8 +128,11 @@ func extractElementAttrs(node *html.Node, state *htmlExtractionState) {
 		if val == "" {
 			continue
 		}
+		if len(val) > maxExtractedAttrLen {
+			continue
+		}
 
-		if key == "aria-label" || key == "alt" || key == "title" {
+		if key == "aria-label" || key == "alt" || key == "title" || key == "placeholder" {
 			state.attrs = append(state.attrs, val)
 			continue
 		}
@@ -180,7 +182,19 @@ func styleIndicatesHidden(style string) bool {
 	if strings.Contains(compact, "visibility:hidden") {
 		return true
 	}
+	if strings.Contains(compact, "opacity:0") {
+		return true
+	}
+	if strings.Contains(compact, "filter:opacity(0") {
+		return true
+	}
 	if strings.Contains(compact, "font-size:0") {
+		return true
+	}
+	if strings.Contains(compact, "transform:scale(0") {
+		return true
+	}
+	if strings.Contains(compact, "clip-path:inset(") {
 		return true
 	}
 

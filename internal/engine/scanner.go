@@ -71,9 +71,9 @@ func (s *scanner) scan(text string, maxDecodeDepth, maxDecodedVariants int) []ma
 // severityWeight maps severity level (1–5) to a score contribution.
 var severityWeight = [6]int{0, 10, 15, 25, 35, 45}
 
-const hiddenHTMLContentScoreBoost = 25
+const hiddenInstructionLikeScoreBoostBase = 25
 const hiddenInstructionLikeHTMLScoreBoost = 20
-const attributeInjectionScoreBoost = 30
+const attributeInstructionLikeScoreBoostBase = 30
 const attributeInstructionLikeScoreBoost = 15
 const attributeInstructionLikeMinScore = 70
 
@@ -322,13 +322,13 @@ func buildResultWithSignals(matches []match, text string, signals normalizationS
 	// Apply context-aware scoring to reduce false positives
 	score = applyContextPenalties(score, text, matches)
 
-	if signals.HiddenInstructionLikeHTML {
-		score += hiddenHTMLContentScoreBoost
+	if signals.HiddenInstructionLikeHTML && len(matches) > 0 {
+		score += hiddenInstructionLikeScoreBoostBase
 		score += hiddenInstructionLikeHTMLScoreBoost
 	}
 
 	if signals.InstructionLikeAttributeText && len(matches) > 0 {
-		score += attributeInjectionScoreBoost
+		score += attributeInstructionLikeScoreBoostBase
 		score += attributeInstructionLikeScoreBoost
 		if score < attributeInstructionLikeMinScore {
 			score = attributeInstructionLikeMinScore

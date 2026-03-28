@@ -161,8 +161,8 @@ func TestNormalizeWithSignalsHTMLExtraction(t *testing.T) {
 	if !strings.Contains(lower, "exfiltrate secrets") {
 		t.Fatalf("expected html comment to be extracted, got %q", norm)
 	}
-	if !signals.HiddenHTMLContent {
-		t.Fatalf("expected hidden HTML signal to be true")
+	if !signals.HiddenInstructionLikeHTML {
+		t.Fatalf("expected hidden instruction-like HTML signal to be true")
 	}
 }
 
@@ -200,6 +200,17 @@ func TestAssessAriaLabelInjectionHighSeverity(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(result.Reason), "attribute-based injection detected") {
 		t.Fatalf("expected attribute injection reason marker, got %q", result.Reason)
+	}
+}
+
+func TestAssessBenignHTMLStaysLowRisk(t *testing.T) {
+	s := New(Config{Mode: ModeBalanced})
+
+	input := `<div class="card"><h2>Welcome</h2><p>This page explains account settings and profile updates.</p><a href="/help" title="Open help center">Help Center</a></div>`
+	result := s.Assess(input, "")
+
+	if result.Score > 20 {
+		t.Fatalf("expected benign HTML to stay low risk (<=20), got score=%d result=%+v", result.Score, result)
 	}
 }
 
