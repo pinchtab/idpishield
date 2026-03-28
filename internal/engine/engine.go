@@ -171,21 +171,23 @@ func EscapeContentTags(content string) string {
 
 // ClampForAnalysis truncates text for analysis, preserving head and tail.
 func ClampForAnalysis(text string, maxBytes int) string {
-	if maxBytes <= 0 || len(text) <= maxBytes {
+	runes := []rune(text)
+
+	if maxBytes <= 0 || len(runes) <= maxBytes {
 		return text
 	}
 
 	if maxBytes <= 16 {
-		return text[:maxBytes]
+		return string(runes[:maxBytes])
 	}
 
 	head := (maxBytes * 3) / 4
 	tail := maxBytes - head - 1
 	if tail <= 0 {
-		return text[:maxBytes]
+		return string(runes[:maxBytes])
 	}
 
-	return text[:head] + "\n" + text[len(text)-tail:]
+	return string(runes[:head]) + "\n" + string(runes[len(runes)-tail:])
 }
 
 // MergeRiskResults combines two RiskResults, taking the higher score.

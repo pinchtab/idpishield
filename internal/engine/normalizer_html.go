@@ -3,11 +3,16 @@ package engine
 import (
 	"regexp"
 	"strings"
+	"unicode"
 
 	"golang.org/x/net/html"
 )
 
-var htmlTagHeuristic = regexp.MustCompile(`(?is)<\s*(?:!doctype|html|head|body|meta|title|div|span|p|a|img|section|article|main|script|style|[a-z][a-z0-9:-]*)\b|<!--|</\s*[a-z][a-z0-9:-]*\s*>`)
+var htmlClosingTagHeuristic = regexp.MustCompile(`(?is)</\s*[a-z][a-z0-9:-]*\s*>`)
+var htmlKnownTagHeuristic = regexp.MustCompile(`(?is)<\s*(?:!doctype|html|head|body|meta|title|div|span|p|a|img|section|article|main|header|footer|nav|aside|h[1-6]|ul|ol|li|table|thead|tbody|tr|th|td|form|input|button|label|textarea|select|option|code|pre|blockquote|strong|em|br|hr)\b`)
+var opacityZeroHiddenPattern = regexp.MustCompile(`opacity:0(?:\s*;|\s*!important|$)`)
+var filterOpacityZeroHiddenPattern = regexp.MustCompile(`filter:opacity\(0(?:\s*\)|\s*!important)`)
+var transformScaleZeroHiddenPattern = regexp.MustCompile(`transform:scale\(0(?:\s*\)|\s*!important)`)
 var instructionLikeHTMLPattern = regexp.MustCompile(`(?i)\b(?:ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions?|disregard\s+(?:all\s+)?(?:(?:previous|prior)\s+)?instructions?|override\s+(?:system|assistant)\s+(?:instructions?|prompt)|bypass\s+security(?:\s+controls?)?|reveal\s+(?:the\s+)?(?:system\s+prompt|secrets?)|jailbreak\s+(?:the\s+)?system|exfiltrat(?:e|ion)\s+(?:data|secrets?)|dump\s+secrets?)\b`)
 
 // looksLikeHTML performs a lightweight heuristic check to avoid parsing plain text.
@@ -19,7 +24,13 @@ func looksLikeHTML(input string) bool {
 	if !strings.Contains(s, "<") || !strings.Contains(s, ">") {
 		return false
 	}
-	return htmlTagHeuristic.MatchString(s)
+	if strings.Contains(s, "<!--") {
+		return true
+	}
+	if htmlClosingTagHeuristic.MatchString(s) {
+		return true
+	}
+	return htmlKnownTagHeuristic.MatchString(s)
 }
 
 type htmlExtractionState struct {
@@ -171,10 +182,12 @@ func elementIsHidden(node *html.Node) bool {
 }
 
 func styleIndicatesHidden(style string) bool {
-	compact := strings.ReplaceAll(style, " ", "")
-	compact = strings.ReplaceAll(compact, "\t", "")
-	compact = strings.ReplaceAll(compact, "\n", "")
-	compact = strings.ReplaceAll(compact, "\r", "")
+	compact := strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, style)
 
 	if strings.Contains(compact, "display:none") {
 		return true
@@ -182,16 +195,16 @@ func styleIndicatesHidden(style string) bool {
 	if strings.Contains(compact, "visibility:hidden") {
 		return true
 	}
-	if strings.Contains(compact, "opacity:0") {
+	if opacityZeroHiddenPattern.MatchString(compact) {
 		return true
 	}
-	if strings.Contains(compact, "filter:opacity(0") {
+	if filterOpacityZeroHiddenPattern.MatchString(compact) {
 		return true
 	}
 	if strings.Contains(compact, "font-size:0") {
 		return true
 	}
-	if strings.Contains(compact, "transform:scale(0") {
+	if transformScaleZeroHiddenPattern.MatchString(compact) {
 		return true
 	}
 	if strings.Contains(compact, "clip-path:inset(") {

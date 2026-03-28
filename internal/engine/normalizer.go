@@ -43,6 +43,15 @@ func (n *normalizer) NormalizeWithSignals(text string) (string, normalizationSig
 		extracted, htmlSignals, ok := extractHTMLContent(text)
 		if ok {
 			source = extracted
+			const htmlContextAppendBytes = 512
+			context := text
+			if len(context) > 0 {
+				runes := []rune(context)
+				if len(runes) > htmlContextAppendBytes {
+					context = string(runes[:htmlContextAppendBytes])
+				}
+				source = extracted + " " + context
+			}
 			signals.HiddenInstructionLikeHTML = htmlSignals.HiddenInstructionLikeHTML
 			signals.InstructionLikeAttributeText = htmlSignals.InstructionLikeAttributeText
 		}
