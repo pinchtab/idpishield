@@ -87,14 +87,15 @@ func (e *Engine) AssessContext(ctx context.Context, text, sourceURL string) Risk
 
 	analysisText := boundedText
 	normalizedText := ""
+	normSignals := normalizationSignals{}
 
 	if e.cfg.Mode != ModeFast {
-		normalizedText = e.normalizer.Normalize(boundedText)
+		normalizedText, normSignals = e.normalizer.NormalizeWithSignals(boundedText)
 		analysisText = normalizedText
 	}
 
 	matches := e.scanner.scan(analysisText, e.cfg.MaxDecodeDepth, e.cfg.MaxDecodedVariants)
-	result := buildResult(matches, normalizedText, e.cfg.StrictMode, e.cfg.BlockThreshold)
+	result := buildResultWithSignals(matches, normalizedText, normSignals, e.cfg.StrictMode, e.cfg.BlockThreshold)
 
 	if e.cfg.Mode == ModeDeep && e.service != nil && result.Score >= ThresholdEscalation {
 		serviceResult, err := e.service.assess(ctx, boundedText, sourceURL, e.cfg.Mode.String())
@@ -170,21 +171,23 @@ func EscapeContentTags(content string) string {
 
 // ClampForAnalysis truncates text for analysis, preserving head and tail.
 func ClampForAnalysis(text string, maxBytes int) string {
-	if maxBytes <= 0 || len(text) <= maxBytes {
+	runes := []rune(text)
+
+	if maxBytes <= 0 || len(runes) <= maxBytes {
 		return text
 	}
 
 	if maxBytes <= 16 {
-		return text[:maxBytes]
+		return string(runes[:maxBytes])
 	}
 
 	head := (maxBytes * 3) / 4
 	tail := maxBytes - head - 1
 	if tail <= 0 {
-		return text[:maxBytes]
+		return string(runes[:maxBytes])
 	}
 
-	return text[:head] + "\n" + text[len(text)-tail:]
+	return string(runes[:head]) + "\n" + string(runes[len(runes)-tail:])
 }
 
 // MergeRiskResults combines two RiskResults, taking the higher score.

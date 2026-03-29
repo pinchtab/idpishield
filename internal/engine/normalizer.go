@@ -13,6 +13,11 @@ import (
 // It produces a derived scanning representation while preserving source input.
 type normalizer struct{}
 
+type normalizationSignals struct {
+	HiddenInstructionLikeHTML    bool
+	InstructionLikeAttributeText bool
+}
+
 func newNormalizer() *normalizer {
 	return &normalizer{}
 }
@@ -20,8 +25,36 @@ func newNormalizer() *normalizer {
 // Normalize applies the full normalization pipeline to input text.
 // Returns the normalized string suitable for pattern matching.
 func (n *normalizer) Normalize(text string) string {
+	normalized, _ := n.NormalizeWithSignals(text)
+	return normalized
+}
+
+// NormalizeWithSignals applies normalization and returns detection signals
+// derived during preprocessing (for example, hidden HTML content).
+func (n *normalizer) NormalizeWithSignals(text string) (string, normalizationSignals) {
 	if len(text) == 0 {
-		return text
+		return text, normalizationSignals{}
+	}
+
+	signals := normalizationSignals{}
+	source := text
+
+	if looksLikeHTML(text) {
+		extracted, htmlSignals, ok := extractHTMLContent(text)
+		if ok {
+			source = extracted
+			const htmlContextAppendBytes = 512
+			context := text
+			if len(context) > 0 {
+				runes := []rune(context)
+				if len(runes) > htmlContextAppendBytes {
+					context = string(runes[:htmlContextAppendBytes])
+				}
+				source = extracted + " " + context
+			}
+			signals.HiddenInstructionLikeHTML = htmlSignals.HiddenInstructionLikeHTML
+			signals.InstructionLikeAttributeText = htmlSignals.InstructionLikeAttributeText
+		}
 	}
 
 	// Pipeline order matters:
@@ -30,7 +63,7 @@ func (n *normalizer) Normalize(text string) string {
 	// 3) Normalize separator punctuation into spaces when it is used as token glue
 	// 4) Collapse whitespace and deobfuscate targeted split keywords
 
-	stage := html.UnescapeString(text)
+	stage := html.UnescapeString(source)
 	stage = norm.NFKC.String(stage)
 
 	runes := []rune(stage)
@@ -75,7 +108,7 @@ func (n *normalizer) Normalize(text string) string {
 	out := strings.TrimSpace(buf.String())
 	out = collapseSpaces(out)
 	out = normalizeSplitKeywords(out)
-	return out
+	return out, signals
 }
 
 func isSeparatorForSplitWords(r rune) bool {
