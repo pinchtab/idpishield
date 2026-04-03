@@ -51,22 +51,64 @@ var awsSecretContextPattern = regexp.MustCompile(`(?i)\b(?:aws|secret)\b`)
 var highEntropyTokenPattern = regexp.MustCompile(`\b[0-9A-Za-z]{20,}\b`)
 var secretsKeywordPattern = regexp.MustCompile(`(?i)\b(?:api|key|token|secret|password|bearer|auth|credential)s?\b`)
 
+const secretsEntropyKeywordContextType = "__entropy-keyword-context"
+
 // scanSecrets detects credential-like patterns and entropy-based secret candidates.
 func scanSecrets(text string) secretsResult {
-	result := secretsResult{Confidence: "low"}
 	if strings.TrimSpace(text) == "" {
-		return result
+		return secretsResult{Confidence: "low"}
 	}
 
-	seen := make(map[string]struct{})
-	hasHigh := false
-	hasMedium := false
-	hasEntropy := false
+	lowered := strings.ToLower(text)
+	hasKeyword := hasSecretPrefilterKeyword(lowered)
+	runFullScan := hasKeyword || len(text) >= 500
 
+	var highTypes []string
+	var mediumTypes []string
+
+	if runFullScan {
+		_, highTypes = matchHighConfidencePatterns(text)
+		_, mediumTypes = matchMediumConfidencePatterns(text)
+	}
+
+	hasEntropy := matchEntropyTokens(text)
+	entropyKeywordContext := hasEntropy && secretsKeywordPattern.FindStringIndex(text) != nil
+	if entropyKeywordContext {
+		mediumTypes = append(mediumTypes, secretsEntropyKeywordContextType)
+	}
+	return buildSecretsResult(highTypes, mediumTypes, hasEntropy)
+}
+
+// hasSecretPrefilterKeyword reports whether lowered text has cheap secret-like keywords.
+func hasSecretPrefilterKeyword(lowered string) bool {
+	return strings.Contains(lowered, "akia") ||
+		strings.Contains(lowered, "ghp_") ||
+		strings.Contains(lowered, "gho_") ||
+		strings.Contains(lowered, "github_pat_") ||
+		strings.Contains(lowered, "aiza") ||
+		strings.Contains(lowered, "sk_live_") ||
+		strings.Contains(lowered, "pk_live_") ||
+		strings.Contains(lowered, "xox") ||
+		strings.Contains(lowered, "npm_") ||
+		strings.Contains(lowered, "sk-ant-") ||
+		strings.Contains(lowered, "sk-") ||
+		strings.Contains(lowered, "hf_") ||
+		strings.Contains(lowered, "sig=") ||
+		strings.Contains(lowered, "bearer") ||
+		strings.Contains(lowered, "api_key") ||
+		strings.Contains(lowered, "api-key") ||
+		strings.Contains(lowered, "apikey") ||
+		strings.Contains(lowered, "password") ||
+		strings.Contains(lowered, "secret")
+}
+
+// matchHighConfidencePatterns checks all high-confidence secret patterns.
+func matchHighConfidencePatterns(text string) (matched bool, types []string) {
+	types = make([]string, 0, len(secretsHighPatterns)+1)
 	for _, p := range secretsHighPatterns {
 		if p.rx.FindStringIndex(text) != nil {
-			seen[p.name] = struct{}{}
-			hasHigh = true
+			types = append(types, p.name)
+			matched = true
 		}
 	}
 
@@ -80,19 +122,29 @@ func scanSecrets(text string) secretsResult {
 			end = len(text)
 		}
 		if awsSecretContextPattern.FindStringIndex(text[start:end]) != nil {
-			seen["aws-secret-key"] = struct{}{}
-			hasHigh = true
+			types = append(types, "aws-secret-key")
+			matched = true
 			break
 		}
 	}
 
+	return matched, types
+}
+
+// matchMediumConfidencePatterns checks all medium-confidence secret patterns.
+func matchMediumConfidencePatterns(text string) (matched bool, types []string) {
+	types = make([]string, 0, len(secretsMediumPatterns))
 	for _, p := range secretsMediumPatterns {
 		if p.rx.FindStringIndex(text) != nil {
-			seen[p.name] = struct{}{}
-			hasMedium = true
+			types = append(types, p.name)
+			matched = true
 		}
 	}
+	return matched, types
+}
 
+// matchEntropyTokens checks whether any token exceeds the configured entropy threshold.
+func matchEntropyTokens(text string) bool {
 	dataImageRanges := findDataImageRanges(strings.ToLower(text))
 	for _, loc := range highEntropyTokenPattern.FindAllStringIndex(text, -1) {
 		if indexInRanges(loc[0], dataImageRanges) {
@@ -100,30 +152,68 @@ func scanSecrets(text string) secretsResult {
 		}
 		tok := text[loc[0]:loc[1]]
 		if shannonEntropy(tok) > secretsEntropyThreshold {
-			seen["high-entropy-token"] = struct{}{}
-			hasEntropy = true
+			return true
 		}
 	}
+	return false
+}
 
-	if !hasHigh && !hasMedium && !hasEntropy {
+// buildSecretsResult constructs the final secrets result from detector outputs.
+func buildSecretsResult(high []string, medium []string, hasEntropy bool) secretsResult {
+	result := secretsResult{Confidence: "low"}
+	if len(high) == 0 && len(medium) == 0 && !hasEntropy {
 		return result
+	}
+
+	seen := make(map[string]struct{}, len(high)+len(medium)+1)
+	for _, t := range high {
+		seen[t] = struct{}{}
+	}
+	for _, t := range medium {
+		if t == secretsEntropyKeywordContextType {
+			continue
+		}
+		seen[t] = struct{}{}
+	}
+	if hasEntropy {
+		seen["high-entropy-token"] = struct{}{}
 	}
 
 	result.HasSecrets = true
 	result.MatchedTypes = mapKeysSorted(seen)
 
 	switch {
-	case hasHigh:
+	case len(high) > 0:
 		result.Confidence = "high"
-	case hasMedium:
+	case hasMediumConfidenceTypes(medium):
 		result.Confidence = "medium"
-	case hasEntropy && secretsKeywordPattern.FindStringIndex(text) != nil:
+	case hasEntropy && hasEntropyKeywordContext(medium):
 		result.Confidence = "medium"
 	default:
 		result.Confidence = "low"
 	}
 
 	return result
+}
+
+// hasMediumConfidenceTypes reports whether medium detector returned actual medium matches.
+func hasMediumConfidenceTypes(medium []string) bool {
+	for _, t := range medium {
+		if t != secretsEntropyKeywordContextType {
+			return true
+		}
+	}
+	return false
+}
+
+// hasEntropyKeywordContext reports whether entropy had secret-keyword context.
+func hasEntropyKeywordContext(medium []string) bool {
+	for _, t := range medium {
+		if t == secretsEntropyKeywordContextType {
+			return true
+		}
+	}
+	return false
 }
 
 // shannonEntropy returns the Shannon entropy score for a string token.

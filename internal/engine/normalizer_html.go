@@ -14,9 +14,12 @@ var opacityZeroHiddenPattern = regexp.MustCompile(`opacity:0(?:\.0+)?(?:;|!impor
 var filterOpacityZeroHiddenPattern = regexp.MustCompile(`filter:opacity\(0(?:\s*\)|\s*!important)`)
 var transformScaleZeroHiddenPattern = regexp.MustCompile(`transform:scale\(0(?:\s*\)|\s*!important)`)
 var fontSizeZeroHiddenPattern = regexp.MustCompile(`font-size:0(?:px|em|pt|rem|%)?(?:;|!important|$)`)
-var clipPathInsetHundredPattern = regexp.MustCompile(`clip-path:inset\(100%(?:\)|[^)]*\))`)
+var clipPathHiddenPattern = regexp.MustCompile(`clip-path:(?:inset\((?:9[5-9]%|100%|100v[hw]|(?:100|[1-9]\d{2,})\s*px)\)|polygon\(0(?:\s+)?0\)|circle\(0\))`)
 var styleColorPattern = regexp.MustCompile(`(?:^|;)color:([^;]+)`)
 var styleBackgroundPattern = regexp.MustCompile(`(?:^|;)(?:background|background-color):([^;]+)`)
+var colorHexPattern = regexp.MustCompile(`^#([0-9a-f]{3}|[0-9a-f]{6})$`)
+var colorRGBPattern = regexp.MustCompile(`^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$`)
+var colorHSLPattern = regexp.MustCompile(`^hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)$`)
 var instructionLikeHTMLPattern = regexp.MustCompile(`(?i)\b(?:ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions?|disregard\s+(?:all\s+)?(?:(?:previous|prior)\s+)?instructions?|override\s+(?:system|assistant)\s+(?:instructions?|prompt)|bypass\s+security(?:\s+controls?)?|reveal\s+(?:the\s+)?(?:system\s+prompt|secrets?)|jailbreak\s+(?:the\s+)?system|exfiltrat(?:e|ion)\s+(?:data|secrets?)|dump\s+secrets?)\b`)
 
 // looksLikeHTML performs a lightweight heuristic check to avoid parsing plain text.
@@ -231,7 +234,7 @@ func styleIndicatesHidden(style string) bool {
 	if transformScaleZeroHiddenPattern.MatchString(compact) {
 		return true
 	}
-	if clipPathInsetHundredPattern.MatchString(compact) {
+	if clipPathHiddenPattern.MatchString(compact) {
 		return true
 	}
 	if styleHasColorCamouflage(compact) {
@@ -384,11 +387,26 @@ func normalizeColorToken(v string) string {
 		return ""
 	}
 
-	if value == "white" || value == "#fff" || value == "#ffffff" || value == "rgb(255,255,255)" {
-		return "white"
+	if colorHexPattern.MatchString(value) {
+		return "hex:" + value
 	}
-	if value == "black" || value == "#000" || value == "#000000" || value == "rgb(0,0,0)" {
-		return "black"
+
+	if m := colorRGBPattern.FindStringSubmatch(value); len(m) == 4 {
+		return "rgb:" + m[1] + "," + m[2] + "," + m[3]
+	}
+
+	if m := colorHSLPattern.FindStringSubmatch(value); len(m) == 4 {
+		return "hsl:" + m[1] + "," + m[2] + "," + m[3]
+	}
+
+	camouflageNamedColors := map[string]struct{}{
+		"black": {}, "white": {},
+		"red": {}, "blue": {}, "green": {}, "yellow": {}, "orange": {}, "purple": {}, "pink": {},
+		"brown": {}, "grey": {}, "gray": {}, "cyan": {}, "magenta": {}, "lime": {}, "navy": {},
+		"maroon": {}, "olive": {}, "teal": {}, "silver": {}, "gold": {},
+	}
+	if _, ok := camouflageNamedColors[value]; ok {
+		return "named:" + value
 	}
 
 	return ""

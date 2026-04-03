@@ -28,7 +28,6 @@ const (
 
 var codeKeywordPattern = regexp.MustCompile(`(?i)\b(func|class|def|var|const|import|return)\b`)
 var base64LikePattern = regexp.MustCompile(`^[A-Za-z0-9+/]+={1,2}$`)
-var injectionLikeKeywordPattern = regexp.MustCompile(`(?i)\b(ignore|disregard|override|bypass|forget|previous|prior|instructions?|system|prompt|obey|comply|neutralize|circumvent|suppress|unrestricted|jailbreak|pretend|roleplay|act\s+as|developer\s+mode|exfiltrat(?:e|ion)|new\s+instructions?)\b`)
 
 // scanGibberish evaluates text with lightweight heuristics for obfuscated nonsense payloads.
 func scanGibberish(text string) gibberishResult {
@@ -82,10 +81,6 @@ func scanGibberish(text string) gibberishResult {
 	}
 
 	return result
-}
-
-func containsInjectionLikeKeywords(text string) bool {
-	return injectionLikeKeywordPattern.FindStringIndex(text) != nil
 }
 
 func tokenizeWords(s string) []string {

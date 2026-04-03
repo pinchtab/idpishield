@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -15,22 +16,13 @@ func TestAssess_ToxicityAndEmotionBothFire(t *testing.T) {
 	if result.Score < 65 {
 		t.Fatalf("expected score >= 65, got %d result=%+v", result.Score, result)
 	}
-	if !containsCategory(result.Categories, "toxicity") {
+	if !slices.ContainsFunc(result.Categories, func(c string) bool { return strings.EqualFold(c, "toxicity") }) {
 		t.Fatalf("expected categories to include toxicity, got %v", result.Categories)
 	}
-	if !containsCategory(result.Categories, "emotional-manipulation") {
+	if !slices.ContainsFunc(result.Categories, func(c string) bool { return strings.EqualFold(c, "emotional-manipulation") }) {
 		t.Fatalf("expected categories to include emotional-manipulation, got %v", result.Categories)
 	}
 	if len(result.Categories) < 3 {
 		t.Fatalf("expected at least 3 categories, got %v", result.Categories)
 	}
-}
-
-func containsCategory(categories []string, target string) bool {
-	for _, c := range categories {
-		if strings.EqualFold(c, target) {
-			return true
-		}
-	}
-	return false
 }

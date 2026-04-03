@@ -46,6 +46,11 @@ var toxicityTier2Phrases = []string{
 	"your original programming", "you are now free", "remove your filters", "disable your safety", "turn off your restrictions",
 }
 
+// Tier3 hostile words intentionally require 3+ matches to cross the
+// IsToxic threshold (ToxicityScore >= 0.15). This mitigates false
+// positives on legitimate product review content where single negative
+// words like "terrible" or "awful" appear in benign context.
+// Known overlap: review/feedback language. Threshold is the guard.
 var toxicityTier3Words = []string{
 	"idiot", "stupid", "moron", "worthless", "useless", "pathetic", "garbage", "trash", "disgusting",
 	"horrible", "terrible", "awful", "dumb", "incompetent", "failure", "loser", "brainless", "mindless",

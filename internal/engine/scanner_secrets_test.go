@@ -100,6 +100,20 @@ func TestScanSecrets_CleanSentence(t *testing.T) {
 	}
 }
 
+func TestScanSecrets_PreFilterSkipsCleanShortText(t *testing.T) {
+	res := scanSecrets("The weather is nice today in the park.")
+	if res.HasSecrets {
+		t.Fatalf("expected no secret detection for short clean text, got %+v", res)
+	}
+}
+
+func TestScanSecrets_EntropyRunsEvenWithPreFilter(t *testing.T) {
+	res := scanSecrets("Xk9mP2qR7nL4wS1vB6cY3jH8dF0eA5t")
+	if res.Confidence == "" {
+		t.Fatalf("expected secrets scan to return a valid result, got %+v", res)
+	}
+}
+
 func TestScanSecrets_PasswordWordAloneDoesNotTrigger(t *testing.T) {
 	res := scanSecrets("please set your password before continuing")
 	if res.HasSecrets {

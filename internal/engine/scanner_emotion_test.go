@@ -25,7 +25,7 @@ func TestScanEmotion_DetectionCases(t *testing.T) {
 			if res.HasEmotionalManipulation != tt.wantDetect {
 				t.Fatalf("expected detect=%v, got %+v", tt.wantDetect, res)
 			}
-			if tt.wantType != "" && !containsString(res.EmotionTypes, tt.wantType) {
+			if tt.wantType != "" && !containsCategory(res.EmotionTypes, tt.wantType) {
 				t.Fatalf("expected emotion type %q, got %+v", tt.wantType, res)
 			}
 		})

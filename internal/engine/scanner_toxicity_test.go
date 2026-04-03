@@ -57,3 +57,13 @@ func TestScanToxicity_EdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestScanToxicity_ProductReviewNotFlagged(t *testing.T) {
+	res := scanToxicity("This product is terrible and the customer service was awful. I would not recommend it to anyone.")
+	if res.IsToxic {
+		t.Fatalf("expected product review text to stay below toxic threshold, got %+v", res)
+	}
+	if res.ToxicityScore >= toxicityActivationThreshold {
+		t.Fatalf("expected score < %.2f for product review text, got %+v", toxicityActivationThreshold, res)
+	}
+}
