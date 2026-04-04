@@ -66,7 +66,7 @@ func TestLoadConfigFile_InvalidPath(t *testing.T) {
 
 func TestLoadEnvVars_ParsesCommaSeparated(t *testing.T) {
 	t.Setenv("IDPISHIELD_BAN_TOPICS", "crypto,gambling, adult")
-	cfg := loadEnvVars()
+	cfg := LoadEnvVars()
 	want := []string{"crypto", "gambling", "adult"}
 	if !reflect.DeepEqual(cfg.BanTopics, want) {
 		t.Fatalf("expected %v, got %v", want, cfg.BanTopics)
@@ -78,7 +78,7 @@ func TestLoadEnvVars_EmptyEnv(t *testing.T) {
 	t.Setenv("IDPISHIELD_BAN_TOPICS", "")
 	t.Setenv("IDPISHIELD_BAN_COMPETITORS", "")
 	t.Setenv("IDPISHIELD_CUSTOM_REGEX", "")
-	cfg := loadEnvVars()
+	cfg := LoadEnvVars()
 	if len(cfg.BanSubstrings) != 0 || len(cfg.BanTopics) != 0 || len(cfg.BanCompetitors) != 0 || len(cfg.CustomRegex) != 0 {
 		t.Fatalf("expected empty env config, got %+v", cfg)
 	}
@@ -86,7 +86,7 @@ func TestLoadEnvVars_EmptyEnv(t *testing.T) {
 
 func TestLoadEnvVars_TrailingComma(t *testing.T) {
 	t.Setenv("IDPISHIELD_BAN_TOPICS", "crypto,gambling,")
-	cfg := loadEnvVars()
+	cfg := LoadEnvVars()
 	if len(cfg.BanTopics) != 2 {
 		t.Fatalf("expected 2 topics, got %d (%v)", len(cfg.BanTopics), cfg.BanTopics)
 	}
@@ -97,7 +97,7 @@ func TestLoadEnvVars_TrailingComma(t *testing.T) {
 
 func TestLoadEnvVars_SpacesAroundComma(t *testing.T) {
 	t.Setenv("IDPISHIELD_BAN_TOPICS", "crypto , gambling")
-	cfg := loadEnvVars()
+	cfg := LoadEnvVars()
 	if !reflect.DeepEqual(cfg.BanTopics, []string{"crypto", "gambling"}) {
 		t.Fatalf("expected [crypto gambling], got %v", cfg.BanTopics)
 	}
@@ -105,15 +105,13 @@ func TestLoadEnvVars_SpacesAroundComma(t *testing.T) {
 
 func TestLoadEnvVars_EmptyString(t *testing.T) {
 	t.Setenv("IDPISHIELD_BAN_TOPICS", "")
-	cfg := loadEnvVars()
+	cfg := LoadEnvVars()
 	if len(cfg.BanTopics) != 0 {
 		t.Fatalf("expected empty topics, got %v", cfg.BanTopics)
 	}
 }
 
-func TestMergeOrder_ConfigFileAndEnv(t *testing.T) {
-	t.Setenv("IDPISHIELD_BAN_SUBSTRINGS", "from-env")
-
+func TestMergeOrder_ConfigFileOnly(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rules.json")
 	content := `{"ban_substrings":["from-file"]}`
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -128,7 +126,7 @@ func TestMergeOrder_ConfigFileAndEnv(t *testing.T) {
 		t.Fatalf("ResolveConfig failed: %v", err)
 	}
 
-	if !reflect.DeepEqual(resolved.BanSubstrings, []string{"from-direct", "from-file", "from-env"}) {
+	if !reflect.DeepEqual(resolved.BanSubstrings, []string{"from-direct", "from-file"}) {
 		t.Fatalf("unexpected merged order: %v", resolved.BanSubstrings)
 	}
 }

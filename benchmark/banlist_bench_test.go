@@ -70,3 +70,17 @@ func BenchmarkBanList_LargeListMiss(b *testing.B) {
 		assessBenchSink = shield.Assess(payload, "https://example.com")
 	}
 }
+
+func BenchmarkBanList_LargeTopicList(b *testing.B) {
+	topics := make([]string, 0, 50)
+	for i := 0; i < 50; i++ {
+		topics = append(topics, fmt.Sprintf("topic-%02d", i))
+	}
+	shield := mustNewBenchmarkShield(b, idpishield.Config{Mode: idpishield.ModeBalanced, BanTopics: topics})
+	payload := "this benign sentence includes topic-37 for controlled benchmark matching"
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		assessBenchSink = shield.Assess(payload, "https://example.com")
+	}
+}

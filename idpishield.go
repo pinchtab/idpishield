@@ -123,26 +123,34 @@ type Config struct {
 	DebiasTriggers *bool
 
 	// BanSubstrings blocks any input containing these exact substrings.
-	// Matching is case-insensitive. Each match contributes to the risk score
-	// and adds the "ban-substring" category to the result.
+	// Matching is case-insensitive. Set directly, via ConfigFile, or
+	// via CLI env vars (IDPISHIELD_BAN_SUBSTRINGS) when using the CLI.
+	// Environment variables are NOT loaded automatically by the library.
 	// Example: []string{"ignore all instructions", "jailbreak"}
 	BanSubstrings []string
 
 	// BanTopics blocks inputs that appear to discuss these topics.
-	// Topic matching uses whole-word case-insensitive substring search.
-	// Each match contributes to the risk score.
+	// Topic matching uses whole-word case-insensitive matching.
+	// Set directly, via ConfigFile, or via CLI env vars when using the CLI.
+	// Environment variables are NOT loaded automatically by the library.
 	// Example: []string{"cryptocurrency", "gambling", "adult content"}
 	BanTopics []string
 
 	// BanCompetitors blocks inputs mentioning these competitor names.
 	// Useful for preventing prompt injection via competitor comparison attacks.
-	// Matching is case-insensitive whole-word.
+	// Matching is case-insensitive whole-word. Set directly, via ConfigFile,
+	// or via CLI env vars when using the CLI.
+	// Environment variables are NOT loaded automatically by the library.
 	// Example: []string{"OpenAI", "Anthropic", "Google Gemini"}
 	BanCompetitors []string
 
 	// CustomRegex blocks inputs matching these user-supplied regex patterns.
-	// Patterns are compiled once at shield initialization. Invalid patterns
-	// are silently skipped and logged via the standard logger.
+	// Patterns are compiled once at shield initialization using Go's regexp
+	// package, which guarantees linear-time matching and is NOT vulnerable
+	// to ReDoS (catastrophic backtracking). Go's regexp uses RE2 semantics
+	// which rejects patterns with backreferences and lookaheads that would
+	// allow exponential matching.
+	// Invalid patterns cause New() to return an error.
 	// Example: []string{`\bORDER-[0-9]{6}\b`, `\bINTERNAL-[A-Z]{3}\b`}
 	CustomRegex []string
 

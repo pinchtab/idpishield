@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-type fileConfig struct {
+type FileConfig struct {
 	BanSubstrings  []string `json:"ban_substrings" yaml:"ban_substrings"`
 	BanTopics      []string `json:"ban_topics" yaml:"ban_topics"`
 	BanCompetitors []string `json:"ban_competitors" yaml:"ban_competitors"`
@@ -22,8 +22,8 @@ const (
 	yamlKeyCustomRegex    = "custom_regex"
 )
 
-// ResolveConfig merges direct config values with optional config-file and
-// environment values, then deduplicates all user-defined rule lists.
+// ResolveConfig merges direct config values with optional config-file values,
+// then deduplicates all user-defined rule lists.
 func ResolveConfig(cfg Config) (Config, error) {
 	resolved := cfg
 
@@ -38,13 +38,7 @@ func ResolveConfig(cfg Config) (Config, error) {
 		resolved.CustomRegex = append(resolved.CustomRegex, fc.CustomRegex...)
 	}
 
-	envCfg := loadEnvVars()
-	resolved.BanSubstrings = append(resolved.BanSubstrings, envCfg.BanSubstrings...)
-	resolved.BanTopics = append(resolved.BanTopics, envCfg.BanTopics...)
-	resolved.BanCompetitors = append(resolved.BanCompetitors, envCfg.BanCompetitors...)
-	resolved.CustomRegex = append(resolved.CustomRegex, envCfg.CustomRegex...)
-
-	// Deduplication runs after all sources (config struct, file, env)
+	// Deduplication runs after all sources (config struct, file)
 	// are merged so the same phrase from multiple sources is only
 	// checked once, preventing inflated scores from duplicate rules.
 	resolved.BanSubstrings = deduplicateStrings(resolved.BanSubstrings)
@@ -55,28 +49,28 @@ func ResolveConfig(cfg Config) (Config, error) {
 	return resolved, nil
 }
 
-func loadConfigFile(path string) (fileConfig, error) {
+func loadConfigFile(path string) (FileConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fileConfig{}, err
+		return FileConfig{}, err
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".json":
-		var fc fileConfig
+		var fc FileConfig
 		if err := json.Unmarshal(data, &fc); err != nil {
-			return fileConfig{}, err
+			return FileConfig{}, err
 		}
 		return fc, nil
 	case ".yaml", ".yml":
 		return parseSimpleYAML(data)
 	default:
-		return fileConfig{}, fmt.Errorf("unsupported config file format %q: expected .json, .yaml, or .yml", ext)
+		return FileConfig{}, fmt.Errorf("unsupported config file format %q: expected .json, .yaml, or .yml", ext)
 	}
 }
 
-func parseSimpleYAML(data []byte) (fileConfig, error) {
+func parseSimpleYAML(data []byte) (FileConfig, error) {
 	currentKey := ""
 	items := map[string][]string{}
 
@@ -89,7 +83,7 @@ func parseSimpleYAML(data []byte) (fileConfig, error) {
 
 		if key, ok := parseYAMLKey(line); ok {
 			if !isSupportedYAMLKey(key) {
-				return fileConfig{}, fmt.Errorf("unsupported YAML key %q at line %d", key, i+1)
+				return FileConfig{}, fmt.Errorf("unsupported YAML key %q at line %d", key, i+1)
 			}
 			currentKey = key
 			continue
@@ -97,7 +91,7 @@ func parseSimpleYAML(data []byte) (fileConfig, error) {
 
 		if value, ok := parseYAMLListItem(line); ok {
 			if currentKey == "" {
-				return fileConfig{}, fmt.Errorf("YAML list item without key at line %d", i+1)
+				return FileConfig{}, fmt.Errorf("YAML list item without key at line %d", i+1)
 			}
 			value = stripQuotes(value)
 			if value == "" {
@@ -107,7 +101,7 @@ func parseSimpleYAML(data []byte) (fileConfig, error) {
 			continue
 		}
 
-		return fileConfig{}, fmt.Errorf("unsupported YAML line format at line %d", i+1)
+		return FileConfig{}, fmt.Errorf("unsupported YAML line format at line %d", i+1)
 	}
 
 	return buildFileConfig(currentKey, items), nil
@@ -135,9 +129,9 @@ func stripQuotes(s string) string {
 	return strings.TrimSpace(trimmed)
 }
 
-func buildFileConfig(currentKey string, items map[string][]string) fileConfig {
+func buildFileConfig(currentKey string, items map[string][]string) FileConfig {
 	_ = currentKey
-	return fileConfig{
+	return FileConfig{
 		BanSubstrings:  items[yamlKeyBanSubstrings],
 		BanTopics:      items[yamlKeyBanTopics],
 		BanCompetitors: items[yamlKeyBanCompetitors],
@@ -154,8 +148,10 @@ func isSupportedYAMLKey(key string) bool {
 	}
 }
 
-func loadEnvVars() fileConfig {
-	return fileConfig{
+// LoadEnvVars parses optional CLI environment variables into ban-list config.
+// Library consumers should pass configuration directly via Config or ConfigFile.
+func LoadEnvVars() FileConfig {
+	return FileConfig{
 		BanSubstrings:  parseEnvList("IDPISHIELD_BAN_SUBSTRINGS"),
 		BanTopics:      parseEnvList("IDPISHIELD_BAN_TOPICS"),
 		BanCompetitors: parseEnvList("IDPISHIELD_BAN_COMPETITORS"),

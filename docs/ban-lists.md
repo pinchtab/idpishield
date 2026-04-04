@@ -61,6 +61,10 @@ custom_regex:
 | `IDPISHIELD_BAN_COMPETITORS` | Comma-separated competitor names | `OpenAI,Anthropic,Google` |
 | `IDPISHIELD_CUSTOM_REGEX` | Comma-separated regex patterns | `\\bORDER-[0-9]{6}\\b,\\bINTERNAL-[A-Z]{3}\\b` |
 
+Environment variables are only loaded when using the idpishield CLI.
+Library users should pass configuration directly via the Config struct
+or ConfigFile. This keeps library behavior deterministic.
+
 ## Scoring Behavior
 Ban-list matches add score using additive contributions:
 - BanSubstrings: +30 per match
@@ -82,5 +86,26 @@ Ban-list matches are explicit user intent and are never debiased.
 - Topic mentions are flagged even if no built-in injection pattern exists.
 
 3. Internal tool blocks internal ID exposure:
-- Configure `CustomRegex: []string{`\bINTERNAL-[A-Z]{3}-[0-9]+\b`}`
+- Configure CustomRegex with a pattern to match internal IDs:
+```go
+CustomRegex: []string{`\bINTERNAL-[A-Z]{3}-[0-9]+\b`}
+```
 - Any matching internal ticket IDs raise score and can trigger blocking.
+
+## Security Considerations
+
+### CustomRegex and ReDoS
+idpishield uses Go's built-in `regexp` package which is based on RE2
+semantics. RE2 guarantees linear-time matching regardless of input size,
+which means it is NOT vulnerable to Regular Expression Denial of Service
+(ReDoS) attacks. Go's regexp package rejects patterns that require
+exponential backtracking (such as those with backreferences).
+
+If a pattern is invalid or uses unsupported syntax, `New()` returns an
+error at initialization time - not at scan time.
+
+### Recommendation
+Even though ReDoS is not a concern with Go's regexp, be mindful of:
+- Very broad patterns (e.g. `.*`) that match almost everything
+- Patterns that may cause false positives on benign content
+- Keeping CustomRegex lists focused and reviewed

@@ -46,3 +46,12 @@ func TestScoreCap_NeverExceeds100(t *testing.T) {
 		t.Fatalf("expected score >= 70 for adversarial payload, got %+v", res)
 	}
 }
+
+func TestOverDefenseRisk_ZeroWhenBanListMatched(t *testing.T) {
+	shield := New(Config{Mode: ModeBalanced, DebiasTriggers: boolPtr(true), BanSubstrings: []string{"specific-banned-phrase"}})
+	res := shield.Assess("specific-banned-phrase in benign context", "")
+
+	if res.OverDefenseRisk != 0.0 {
+		t.Fatalf("expected OverDefenseRisk=0.0 for ban-list match, got %v", res.OverDefenseRisk)
+	}
+}

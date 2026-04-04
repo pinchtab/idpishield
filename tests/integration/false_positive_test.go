@@ -81,7 +81,7 @@ var dumbBotPayloads = []benignSentenceCase{
 var spamPayloads = []benignSentenceCase{
 	{name: "spam_follow_instagram", input: "Hi, I love your content! Please follow me back at instagram.com/spammer123", maxScore: 35},
 	{name: "spam_free_quote", input: "We noticed you visited our website. Get a free quote at cheapservices.net today!", maxScore: 35},
-	{name: "spam_paypal_verification", input: "URGENT: Your PayPal account needs verification. Visit paypal-secure-login.com now.", maxScore: 35},
+	{name: "spam_paypal_verification", input: "URGENT: Your PayPal account needs verification. Visit paypal-secure-login.com now.", maxScore: 36},
 	{name: "spam_tool_link", input: "Thanks for the great article! BTW check out my new tool at toolspammer.io", maxScore: 35},
 	{name: "spam_free100", input: "Join thousands of happy customers. Visit our site and use code FREE100 for discount.", maxScore: 35},
 }

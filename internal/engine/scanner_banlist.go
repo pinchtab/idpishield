@@ -7,10 +7,12 @@ import (
 )
 
 type banListConfig struct {
-	BanSubstrings  []string
-	BanTopics      []string
-	BanCompetitors []string
-	CompiledRegex  []*regexp.Regexp
+	BanSubstrings       []string
+	BanTopics           []string
+	BanCompetitors      []string
+	CompiledTopics      []*regexp.Regexp
+	CompiledCompetitors []*regexp.Regexp
+	CompiledRegex       []*regexp.Regexp
 }
 
 type banListResult struct {
@@ -70,9 +72,9 @@ func scanBanLists(text string, cfg banListConfig) banListResult {
 
 	// BanTopics uses whole-word matching to avoid false positives,
 	// e.g. ban topic "anal" should not match "analysis".
-	result.TopicMatches += scanBanWordList(lowered, text, cfg.BanTopics, "topic:", seenRules, &result)
+	result.TopicMatches += scanCompiledWordList(cfg.CompiledTopics, cfg.BanTopics, "topic:", seenRules, &result, lowered, text)
 	// BanCompetitors also uses whole-word matching to avoid partial-word hits.
-	result.CompetitorMatches += scanBanWordList(lowered, text, cfg.BanCompetitors, "competitor:", seenRules, &result)
+	result.CompetitorMatches += scanCompiledWordList(cfg.CompiledCompetitors, cfg.BanCompetitors, "competitor:", seenRules, &result, lowered, text)
 
 	for _, re := range cfg.CompiledRegex {
 		if re == nil {
@@ -98,15 +100,18 @@ func scanBanLists(text string, cfg banListConfig) banListResult {
 	return result
 }
 
-func scanBanWordList(lowered, original string, terms []string, prefix string, seen map[string]struct{}, result *banListResult) int {
+func scanCompiledWordList(compiled []*regexp.Regexp, original []string, prefix string, seen map[string]struct{}, result *banListResult, lowered string, text string) int {
+	_ = text
 	matches := 0
-	for _, term := range terms {
-		trimmed := strings.TrimSpace(term)
+	for i, re := range compiled {
+		if re == nil || i >= len(original) {
+			continue
+		}
+		trimmed := strings.TrimSpace(original[i])
 		if trimmed == "" {
 			continue
 		}
-		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(strings.ToLower(trimmed)) + `\b`)
-		if re.MatchString(lowered) || re.MatchString(original) {
+		if re.MatchString(lowered) {
 			addBanRule(prefix+trimmed, seen, result)
 			matches++
 		}

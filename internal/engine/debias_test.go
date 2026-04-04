@@ -1,6 +1,9 @@
 package engine
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func boolPtr(b bool) *bool { return &b }
 
@@ -116,5 +119,30 @@ func TestDebias_ComputeContextScore_Scales(t *testing.T) {
 	low := computeContextScore("FREE FREE FREE!!! CLICK NOW!!! XJQPLMNBVCZXQWERTYUIOPASDFGHJKL")
 	if low >= contextScoreScaleLowThreshold {
 		t.Fatalf("expected low context score < %d, got %d", contextScoreScaleLowThreshold, low)
+	}
+}
+
+func TestDebias_InjectionScoreBlocksAllDebias(t *testing.T) {
+	input := "click here now https://example.com limited offer"
+	baseline := 45
+	ctx := assessmentContext{TriggerOnlyScore: 10, InjectionScore: 35}
+
+	adjusted, explanation := applyDebiasAdjustment(input, baseline, ctx)
+	if adjusted != baseline {
+		t.Fatalf("expected no reduction with injection signal, baseline=%d adjusted=%d", baseline, adjusted)
+	}
+	if !strings.Contains(explanation, "injection signal present") {
+		t.Fatalf("expected explanation to mention injection signal, got %q", explanation)
+	}
+}
+
+func TestDebias_BanListMatchBlocksDebias(t *testing.T) {
+	input := "this is a broad documentation-like sample with trigger words"
+	baseline := 22
+	ctx := assessmentContext{TriggerOnlyScore: 22, InjectionScore: 0, HasBanListMatch: true}
+
+	adjusted, _ := applyDebiasAdjustment(input, baseline, ctx)
+	if adjusted != baseline {
+		t.Fatalf("expected no reduction when ban list matched, baseline=%d adjusted=%d", baseline, adjusted)
 	}
 }

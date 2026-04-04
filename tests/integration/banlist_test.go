@@ -102,8 +102,11 @@ func TestBanList_EnvVarLoading(t *testing.T) {
 	t.Setenv("IDPISHIELD_BAN_SUBSTRINGS", "env-banned-phrase")
 	shield := mustNewShield(t, idpishield.Config{Mode: idpishield.ModeBalanced})
 	result := shield.Assess("this contains env-banned-phrase", "")
-	if result.Score < 30 {
-		t.Fatalf("expected score >= 30, got %d", result.Score)
+	if result.Score >= 30 {
+		t.Fatalf("expected score to stay below ban-list threshold without auto-loaded env vars, got %d", result.Score)
+	}
+	if len(result.BanListMatches) != 0 {
+		t.Fatalf("expected no ban-list matches from env vars in library mode, got %v", result.BanListMatches)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	idpi "github.com/pinchtab/idpishield"
+	"github.com/pinchtab/idpishield/internal/engine"
 )
 
 type overDefenseCase struct {
@@ -341,6 +342,12 @@ func runScan(args []string) error {
 	if err := applyProfileDefaults(*profile, &shieldConfig); err != nil {
 		return err
 	}
+
+	envCfg := engine.LoadEnvVars()
+	shieldConfig.BanSubstrings = append(shieldConfig.BanSubstrings, envCfg.BanSubstrings...)
+	shieldConfig.BanTopics = append(shieldConfig.BanTopics, envCfg.BanTopics...)
+	shieldConfig.BanCompetitors = append(shieldConfig.BanCompetitors, envCfg.BanCompetitors...)
+	shieldConfig.CustomRegex = append(shieldConfig.CustomRegex, envCfg.CustomRegex...)
 
 	shield, err := idpi.New(shieldConfig)
 	if err != nil {

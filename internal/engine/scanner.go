@@ -469,13 +469,7 @@ func buildResultWithSignalsWithDebiasAndBan(matches []match, text string, signal
 		reason = "No threats detected"
 	}
 
-	overDefenseRisk := 0.0
-	if context.TriggerOnlyScore > 0 && context.InjectionScore == 0 {
-		overDefenseRisk = float64(context.TriggerOnlyScore) / debiasOverDefenseDivisor
-		if overDefenseRisk > 1.0 {
-			overDefenseRisk = 1.0
-		}
-	}
+	overDefenseRisk := computeOverDefenseRisk(context)
 
 	return RiskResult{
 		Score:           score,
@@ -488,6 +482,20 @@ func buildResultWithSignalsWithDebiasAndBan(matches []match, text string, signal
 		OverDefenseRisk: overDefenseRisk,
 		Intent:          deriveIntent(categories),
 	}
+}
+
+func computeOverDefenseRisk(context assessmentContext) float64 {
+	if context.HasBanListMatch {
+		return 0.0
+	}
+	if context.TriggerOnlyScore <= 0 || context.InjectionScore != 0 {
+		return 0.0
+	}
+	overDefenseRisk := float64(context.TriggerOnlyScore) / debiasOverDefenseDivisor
+	if overDefenseRisk > 1.0 {
+		return 1.0
+	}
+	return overDefenseRisk
 }
 
 func computeBanListContribution(result banListResult) int {

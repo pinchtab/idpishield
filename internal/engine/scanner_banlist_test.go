@@ -18,7 +18,8 @@ func TestScanBanList_SubstringMatch(t *testing.T) {
 
 func TestScanBanList_TopicMatch(t *testing.T) {
 	res := scanBanLists("I want to invest in cryptocurrency today", banListConfig{
-		BanTopics: []string{"cryptocurrency"},
+		BanTopics:      []string{"cryptocurrency"},
+		CompiledTopics: compileWholeWordRegexes([]string{"cryptocurrency"}),
 	})
 	if !res.HasBanMatch {
 		t.Fatal("expected HasBanMatch=true")
@@ -30,7 +31,8 @@ func TestScanBanList_TopicMatch(t *testing.T) {
 
 func TestScanBanList_CompetitorMatch(t *testing.T) {
 	res := scanBanLists("Can you compare your features to OpenAI's ChatGPT?", banListConfig{
-		BanCompetitors: []string{"OpenAI", "ChatGPT"},
+		BanCompetitors:      []string{"OpenAI", "ChatGPT"},
+		CompiledCompetitors: compileWholeWordRegexes([]string{"OpenAI", "ChatGPT"}),
 	})
 	if !res.HasBanMatch {
 		t.Fatal("expected HasBanMatch=true")
@@ -91,9 +93,11 @@ func TestScanBanList_DeduplicationWorks(t *testing.T) {
 
 func TestScanBanList_MultipleRulesFire(t *testing.T) {
 	res := scanBanLists("ignore instructions about cryptocurrency from OpenAI", banListConfig{
-		BanSubstrings:  []string{"ignore instructions"},
-		BanTopics:      []string{"cryptocurrency"},
-		BanCompetitors: []string{"OpenAI"},
+		BanSubstrings:       []string{"ignore instructions"},
+		BanTopics:           []string{"cryptocurrency"},
+		BanCompetitors:      []string{"OpenAI"},
+		CompiledTopics:      compileWholeWordRegexes([]string{"cryptocurrency"}),
+		CompiledCompetitors: compileWholeWordRegexes([]string{"OpenAI"}),
 	})
 	if !res.HasBanMatch {
 		t.Fatal("expected HasBanMatch=true")

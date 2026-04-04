@@ -5,7 +5,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -68,11 +67,15 @@ func New(cfg Config) *Engine {
 		domain:           newDomainChecker(cfg.AllowedDomains),
 		compiledBanRegex: compileCustomRegex(cfg.CustomRegex),
 	}
+	compiledTopics := compileWholeWordRegexes(cfg.BanTopics)
+	compiledCompetitors := compileWholeWordRegexes(cfg.BanCompetitors)
 	e.banListCfg = banListConfig{
-		BanSubstrings:  cfg.BanSubstrings,
-		BanTopics:      cfg.BanTopics,
-		BanCompetitors: cfg.BanCompetitors,
-		CompiledRegex:  e.compiledBanRegex,
+		BanSubstrings:       cfg.BanSubstrings,
+		BanTopics:           cfg.BanTopics,
+		BanCompetitors:      cfg.BanCompetitors,
+		CompiledTopics:      compiledTopics,
+		CompiledCompetitors: compiledCompetitors,
+		CompiledRegex:       e.compiledBanRegex,
 	}
 
 	if cfg.ServiceURL != "" && cfg.Mode == ModeDeep {
@@ -144,9 +147,24 @@ func compileCustomRegex(patterns []string) []*regexp.Regexp {
 		}
 		re, err := regexp.Compile(trimmed)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "idpishield: invalid CustomRegex pattern %q: %v\n", trimmed, err)
+			// Pattern was pre-validated in New() via ValidateCustomRegex.
+			// If we reach here with an invalid pattern it is a logic error;
+			// skip rather than panic to maintain library stability.
 			continue
 		}
+		compiled = append(compiled, re)
+	}
+	return compiled
+}
+
+func compileWholeWordRegexes(terms []string) []*regexp.Regexp {
+	compiled := make([]*regexp.Regexp, 0, len(terms))
+	for _, term := range terms {
+		trimmed := strings.TrimSpace(term)
+		if trimmed == "" {
+			continue
+		}
+		re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(strings.ToLower(trimmed)) + `\b`)
 		compiled = append(compiled, re)
 	}
 	return compiled

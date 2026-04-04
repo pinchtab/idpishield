@@ -89,8 +89,15 @@ var (
 
 // applyDebiasAdjustment reduces weak trigger-only scores in benign-looking context.
 func applyDebiasAdjustment(text string, score int, result assessmentContext) (int, string) {
+	// Never debias when real injection patterns are present.
+	// This is the primary safety guarantee of the debias layer.
+	if result.InjectionScore > 0 {
+		return maxInt(score, 0), "debias: no debias applied, injection signal present"
+	}
+
+	// Never debias when ban-list rules matched (explicit user intent).
 	if result.HasBanListMatch {
-		return maxInt(score, 0), "debias: no debias applied, user ban-list match present"
+		return maxInt(score, 0), "debias: no debias applied, ban-list match present"
 	}
 
 	types := classifyPayloadTypes(text)
@@ -121,12 +128,6 @@ func applyDebiasAdjustment(text string, score int, result assessmentContext) (in
 
 	if result.TriggerOnlyScore <= 0 {
 		return maxInt(adjustedScore, 0), "debias: no debias applied, no trigger-only signal"
-	}
-	if result.InjectionScore > 0 {
-		if adjustedScore < score {
-			return maxInt(adjustedScore, 0), "debias: payload-type reduction only, injection signal present"
-		}
-		return maxInt(score, 0), "debias: no debias applied, injection signal present"
 	}
 
 	contextScore := computeContextScore(text)
