@@ -24,6 +24,18 @@ type overDefenseCase struct {
 	text string
 }
 
+type scanOutput struct {
+	Score           int         `json:"score"`
+	Level           string      `json:"level"`
+	Blocked         bool        `json:"blocked"`
+	Reason          string      `json:"reason"`
+	Patterns        []string    `json:"patterns"`
+	Categories      []string    `json:"categories"`
+	BanListMatches  []string    `json:"ban_list_matches"`
+	OverDefenseRisk float64     `json:"over_defense_risk"`
+	Intent          idpi.Intent `json:"intent,omitempty"`
+}
+
 var overDefenseDataset = []overDefenseCase{
 	{name: "toxicity_movie_review", text: "The movie was terrible and the acting was awful but I still enjoyed it."},
 	{name: "toxicity_ignore_noise", text: "Please ignore the noise outside, it is just construction work."},
@@ -89,7 +101,11 @@ func main() {
 
 func runTestOverDefense(w io.Writer) bool {
 	const threshold = 40
-	shield := idpi.New(idpi.Config{Mode: idpi.ModeBalanced, DebiasTriggers: idpi.BoolPtr(true)})
+	shield, err := idpi.New(idpi.Config{Mode: idpi.ModeBalanced, DebiasTriggers: idpi.BoolPtr(true)})
+	if err != nil {
+		log.Printf("test-overdefense init failed: %v", err)
+		return false
+	}
 	passed := 0
 	var writeErr error
 
@@ -200,10 +216,13 @@ func runMCPServe(args []string) error {
 		return err
 	}
 
-	shields := map[idpi.Mode]*idpi.Shield{
-		idpi.ModeFast:     idpi.New(cfgForMode(baseCfg, idpi.ModeFast)),
-		idpi.ModeBalanced: idpi.New(cfgForMode(baseCfg, idpi.ModeBalanced)),
-		idpi.ModeDeep:     idpi.New(cfgForMode(baseCfg, idpi.ModeDeep)),
+	shields := make(map[idpi.Mode]*idpi.Shield, 3)
+	for _, mode := range []idpi.Mode{idpi.ModeFast, idpi.ModeBalanced, idpi.ModeDeep} {
+		shield, initErr := idpi.New(cfgForMode(baseCfg, mode))
+		if initErr != nil {
+			return initErr
+		}
+		shields[mode] = shield
 	}
 
 	s := server.NewMCPServer(
@@ -285,6 +304,11 @@ func runScan(args []string) error {
 	maxInputBytes := fs.Int("max-input-bytes", 0, "max bytes analyzed per request (0 = unlimited)")
 	maxDecodeDepth := fs.Int("max-decode-depth", 0, "max recursive decode depth (0 = default)")
 	maxDecodedVariants := fs.Int("max-decoded-variants", 0, "max decoded variants scanned (0 = default)")
+	banSubstrings := fs.String("ban-substrings", "", "comma-separated list of substrings to ban")
+	banTopics := fs.String("ban-topics", "", "comma-separated list of topics to ban")
+	banCompetitors := fs.String("ban-competitors", "", "comma-separated list of competitor names to ban")
+	customRegex := fs.String("custom-regex", "", "comma-separated list of custom regex patterns to ban")
+	configFile := fs.String("config-file", "", "path to JSON or YAML ban-list config file")
 
 	if err := fs.Parse(args); err != nil {
 		printUsage(os.Stderr)
@@ -308,18 +332,37 @@ func runScan(args []string) error {
 		MaxInputBytes:                  *maxInputBytes,
 		MaxDecodeDepth:                 *maxDecodeDepth,
 		MaxDecodedVariants:             *maxDecodedVariants,
+		BanSubstrings:                  parseCSVList(*banSubstrings),
+		BanTopics:                      parseCSVList(*banTopics),
+		BanCompetitors:                 parseCSVList(*banCompetitors),
+		CustomRegex:                    parseCSVList(*customRegex),
+		ConfigFile:                     strings.TrimSpace(*configFile),
 	}
 	if err := applyProfileDefaults(*profile, &shieldConfig); err != nil {
 		return err
 	}
 
-	shield := idpi.New(shieldConfig)
+	shield, err := idpi.New(shieldConfig)
+	if err != nil {
+		return err
+	}
 
 	result := shield.Assess(text, *url)
+	output := scanOutput{
+		Score:           result.Score,
+		Level:           result.Level,
+		Blocked:         result.Blocked,
+		Reason:          result.Reason,
+		Patterns:        result.Patterns,
+		Categories:      result.Categories,
+		BanListMatches:  result.BanListMatches,
+		OverDefenseRisk: result.OverDefenseRisk,
+		Intent:          result.Intent,
+	}
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	if err := enc.Encode(result); err != nil {
+	if err := enc.Encode(output); err != nil {
 		return err
 	}
 
@@ -374,6 +417,21 @@ func parseDomains(raw string) []string {
 	return domains
 }
 
+func parseCSVList(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		item := strings.TrimSpace(p)
+		if item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 //nolint:errcheck // usage output — errors are not actionable
 func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "idpishield CLI")
@@ -401,6 +459,11 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --max-input-bytes       max bytes analyzed per request (0 = unlimited)")
 	fmt.Fprintln(w, "  --max-decode-depth      max recursive decode depth (0 = default)")
 	fmt.Fprintln(w, "  --max-decoded-variants  max decoded variants scanned (0 = default)")
+	fmt.Fprintln(w, "  --ban-substrings        comma-separated list of substrings to ban")
+	fmt.Fprintln(w, "  --ban-topics            comma-separated list of topics to ban")
+	fmt.Fprintln(w, "  --ban-competitors       comma-separated list of competitor names to ban")
+	fmt.Fprintln(w, "  --custom-regex          comma-separated list of regex patterns to ban")
+	fmt.Fprintln(w, "  --config-file           path to JSON/YAML ban-list configuration")
 }
 
 //nolint:errcheck // usage output — errors are not actionable

@@ -76,10 +76,13 @@ func main() {
 	strict := flag.Bool("strict", false, "Enable strict mode (blocks at score >= 40)")
 	flag.Parse()
 
-	client := idpi.New(idpi.Config{
+	client, err := idpi.New(idpi.Config{
 		Mode:       idpi.ModeBalanced,
 		StrictMode: *strict,
 	})
+	if err != nil {
+		log.Fatalf("failed to initialize idpishield: %v", err)
+	}
 
 	srv := &server{client: client}
 

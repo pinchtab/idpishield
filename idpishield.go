@@ -8,9 +8,12 @@
 //
 // Basic usage:
 //
-//	client := idpishield.New(idpishield.Config{
+//	client, err := idpishield.New(idpishield.Config{
 //	    Mode: idpishield.ModeBalanced,
 //	})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 //	result := client.Scan(webPageContent)
 //	if result.Blocked {
 //	    log.Printf("Blocked: %s (score: %d)", result.Reason, result.Score)
@@ -118,6 +121,37 @@ type Config struct {
 	// When nil (not set), defaults to true for ModeBalanced and ModeFast,
 	// and false for ModeDeep. Set explicitly to override mode defaults.
 	DebiasTriggers *bool
+
+	// BanSubstrings blocks any input containing these exact substrings.
+	// Matching is case-insensitive. Each match contributes to the risk score
+	// and adds the "ban-substring" category to the result.
+	// Example: []string{"ignore all instructions", "jailbreak"}
+	BanSubstrings []string
+
+	// BanTopics blocks inputs that appear to discuss these topics.
+	// Topic matching uses whole-word case-insensitive substring search.
+	// Each match contributes to the risk score.
+	// Example: []string{"cryptocurrency", "gambling", "adult content"}
+	BanTopics []string
+
+	// BanCompetitors blocks inputs mentioning these competitor names.
+	// Useful for preventing prompt injection via competitor comparison attacks.
+	// Matching is case-insensitive whole-word.
+	// Example: []string{"OpenAI", "Anthropic", "Google Gemini"}
+	BanCompetitors []string
+
+	// CustomRegex blocks inputs matching these user-supplied regex patterns.
+	// Patterns are compiled once at shield initialization. Invalid patterns
+	// are silently skipped and logged via the standard logger.
+	// Example: []string{`\bORDER-[0-9]{6}\b`, `\bINTERNAL-[A-Z]{3}\b`}
+	CustomRegex []string
+
+	// ConfigFile is an optional path to a JSON or YAML file containing
+	// ban list configuration. Fields in this file are MERGED with (not
+	// replacing) any values already set directly in Config.
+	// Supported formats: .json, .yaml, .yml
+	// Example: "/etc/idpishield/rules.yaml"
+	ConfigFile string
 }
 
 // Shield is the main entry point for idpishield analysis.
@@ -127,10 +161,39 @@ type Shield struct {
 }
 
 // New creates a new Shield with the given configuration.
-func New(cfg Config) *Shield {
-	return &Shield{
-		engine: engine.New(toEngineCfg(cfg)),
+// Returns an error if ConfigFile is set and cannot be read or parsed,
+// or if any CustomRegex pattern fails to compile.
+//
+// Migration note: In v0.2.0 this function began returning an error.
+// For simple configurations without ConfigFile or CustomRegex,
+// the error will always be nil and can be safely ignored with:
+//
+//	shield, _ := idpishield.New(cfg)
+//
+// However, checking the error is strongly recommended in production.
+func New(cfg Config) (*Shield, error) {
+	resolvedCfg, err := engine.ResolveConfig(toEngineCfg(cfg))
+	if err != nil {
+		return nil, err
 	}
+	if err := engine.ValidateCustomRegex(resolvedCfg.CustomRegex); err != nil {
+		return nil, err
+	}
+
+	eng := engine.New(resolvedCfg)
+	return &Shield{
+		engine: eng,
+	}, nil
+}
+
+// MustNew creates a new Shield and panics if initialization fails.
+// Use only in tests or main() where error handling is impractical.
+func MustNew(cfg Config) *Shield {
+	s, err := New(cfg)
+	if err != nil {
+		panic("idpishield.MustNew: " + err.Error())
+	}
+	return s
 }
 
 // BoolPtr returns a pointer to a bool value.
@@ -216,5 +279,10 @@ func toEngineCfg(cfg Config) engine.Config {
 		MaxDecodeDepth:                 cfg.MaxDecodeDepth,
 		MaxDecodedVariants:             cfg.MaxDecodedVariants,
 		DebiasTriggers:                 cfg.DebiasTriggers,
+		BanSubstrings:                  cfg.BanSubstrings,
+		BanTopics:                      cfg.BanTopics,
+		BanCompetitors:                 cfg.BanCompetitors,
+		CustomRegex:                    cfg.CustomRegex,
+		ConfigFile:                     cfg.ConfigFile,
 	}
 }

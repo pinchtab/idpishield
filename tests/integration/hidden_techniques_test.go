@@ -6,13 +6,14 @@ import (
 	idpishield "github.com/pinchtab/idpishield"
 )
 
-func newBalancedShield() *idpishield.Shield {
-	return idpishield.New(idpishield.Config{Mode: idpishield.ModeBalanced})
+func newBalancedShield(t *testing.T) *idpishield.Shield {
+	t.Helper()
+	return mustNewShield(t, idpishield.Config{Mode: idpishield.ModeBalanced})
 }
 
 func assertPositiveHiddenTechnique(t *testing.T, payload string) {
 	t.Helper()
-	shield := newBalancedShield()
+	shield := newBalancedShield(t)
 	result := shield.Assess(payload, "https://example.com")
 	if !(result.Score >= 40 || result.Blocked) {
 		t.Fatalf("expected positive detection (score>=40 or blocked), got score=%d blocked=%v reason=%q", result.Score, result.Blocked, result.Reason)
@@ -21,7 +22,7 @@ func assertPositiveHiddenTechnique(t *testing.T, payload string) {
 
 func assertNegativeHiddenTechnique(t *testing.T, payload string) {
 	t.Helper()
-	shield := newBalancedShield()
+	shield := newBalancedShield(t)
 	result := shield.Assess(payload, "https://example.com")
 	if result.Score >= 30 {
 		t.Fatalf("expected low-risk negative (score<30), got score=%d blocked=%v reason=%q", result.Score, result.Blocked, result.Reason)

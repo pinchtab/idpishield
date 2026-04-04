@@ -30,11 +30,15 @@ func main() {
 		input = string(b)
 	}
 
-	shield := idpi.New(idpi.Config{
+	shield, err := idpi.New(idpi.Config{
 		Mode:           idpi.ParseMode(*mode),
 		AllowedDomains: parseDomains(*domains),
 		StrictMode:     *strict,
 	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "create shield: %v\n", err)
+		os.Exit(1)
+	}
 
 	result := shield.Assess(input, *url)
 	enc := json.NewEncoder(os.Stdout)

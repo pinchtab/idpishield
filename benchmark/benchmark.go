@@ -190,7 +190,10 @@ func RunBenchmark(datasetDir string, cfg idpishield.Config) (*Report, error) {
 		return nil, fmt.Errorf("no samples found in %s", datasetDir)
 	}
 
-	shield := idpishield.New(cfg)
+	shield, err := idpishield.New(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("initializing shield: %w", err)
+	}
 
 	results := make([]Result, 0, len(samples))
 	byCategory := make(map[string]*CategoryMetrics)

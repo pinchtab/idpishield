@@ -40,4 +40,5 @@ type assessmentContext struct {
 	TriggerOnlyScore  int
 	InjectionScore    int
 	DebiasExplanation string
+	HasBanListMatch   bool
 }

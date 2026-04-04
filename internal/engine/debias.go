@@ -89,6 +89,10 @@ var (
 
 // applyDebiasAdjustment reduces weak trigger-only scores in benign-looking context.
 func applyDebiasAdjustment(text string, score int, result assessmentContext) (int, string) {
+	if result.HasBanListMatch {
+		return maxInt(score, 0), "debias: no debias applied, user ban-list match present"
+	}
+
 	types := classifyPayloadTypes(text)
 	totalPayloadPenalty := 0
 	for _, pt := range types {

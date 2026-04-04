@@ -371,13 +371,19 @@ func buildResultWithSignals(matches []match, text string, signals normalizationS
 
 // buildResultWithSignalsWithDebias is buildResultWithSignals plus optional debias adjustment.
 func buildResultWithSignalsWithDebias(matches []match, text string, signals normalizationSignals, debiasEnabled bool, strict bool, blockThreshold ...int) RiskResult {
+	return buildResultWithSignalsWithDebiasAndBan(matches, text, signals, banListConfig{}, debiasEnabled, strict, blockThreshold...)
+}
+
+// buildResultWithSignalsWithDebiasAndBan extends scoring with user-defined ban list rules.
+func buildResultWithSignalsWithDebiasAndBan(matches []match, text string, signals normalizationSignals, banCfg banListConfig, debiasEnabled bool, strict bool, blockThreshold ...int) RiskResult {
 	secrets := scanSecrets(text)
 	gibberish := scanGibberish(text)
 	toxicity := scanToxicity(text)
 	emotion := scanEmotion(text)
+	banResult := scanBanLists(text, banCfg)
 	containsInjectionKeywords := containsInjectionLikeKeywords(text)
 
-	if len(matches) == 0 && !secrets.HasSecrets && !gibberish.IsGibberish && !gibberish.HasHighEntropyBlock && !toxicity.IsToxic && !emotion.HasEmotionalManipulation {
+	if len(matches) == 0 && !secrets.HasSecrets && !gibberish.IsGibberish && !gibberish.HasHighEntropyBlock && !toxicity.IsToxic && !emotion.HasEmotionalManipulation && !banResult.HasBanMatch {
 		return SafeResult()
 	}
 
@@ -392,6 +398,7 @@ func buildResultWithSignalsWithDebias(matches []match, text string, signals norm
 	toxicityContribution := computeToxicityContribution(toxicity, containsInjectionKeywords)
 	emotionContribution := computeEmotionContribution(emotion, containsInjectionKeywords)
 	attackPhraseContribution := computeAttackPhraseBoost(text, containsInjectionKeywords)
+	banListContribution := computeBanListContribution(banResult)
 
 	score += signalBoost
 	score += secretsContribution
@@ -399,9 +406,11 @@ func buildResultWithSignalsWithDebias(matches []match, text string, signals norm
 	score += toxicityContribution
 	score += emotionContribution
 	score += attackPhraseContribution
+	score += banListContribution
 	score = applyAttributeInstructionScoreFloor(score, signals, len(matches) > 0)
 
 	context := buildAssessmentContext(score, matches, secrets, gibberish, toxicity, containsInjectionKeywords, secretsContribution)
+	context.HasBanListMatch = banResult.HasBanMatch
 	if debiasEnabled {
 		var explanation string
 		score, explanation = applyDebiasAdjustment(text, score, context)
@@ -421,6 +430,7 @@ func buildResultWithSignalsWithDebias(matches []match, text string, signals norm
 		patternIDs = append(patternIDs, m.PatternID)
 	}
 	patternIDs = appendSyntheticPatternIDs(patternIDs, secrets, gibberish, toxicity, emotion)
+	patternIDs = appendBanListPatternIDs(patternIDs, banResult)
 
 	// Collect unique categories
 	catSet := make(map[string]bool)
@@ -428,6 +438,7 @@ func buildResultWithSignalsWithDebias(matches []match, text string, signals norm
 		catSet[m.Category] = true
 	}
 	appendScannerCategories(catSet, secrets, gibberish, toxicity, emotion)
+	appendBanListCategories(catSet, banResult)
 	categories := make([]string, 0, len(catSet))
 	for c := range catSet {
 		categories = append(categories, c)
@@ -451,6 +462,9 @@ func buildResultWithSignalsWithDebias(matches []match, text string, signals norm
 	if signals.InstructionLikeAttributeText && len(matches) > 0 {
 		reason = appendReason(reason, "attribute-based injection detected")
 	}
+	if banResult.HasBanMatch {
+		reason = appendReason(reason, "user-defined ban rule matched: "+strings.Join(banResult.MatchedRules, ", "))
+	}
 	if strings.TrimSpace(reason) == "" {
 		reason = "No threats detected"
 	}
@@ -470,8 +484,54 @@ func buildResultWithSignalsWithDebias(matches []match, text string, signals norm
 		Reason:          reason,
 		Patterns:        patternIDs,
 		Categories:      categories,
+		BanListMatches:  banResult.MatchedRules,
 		OverDefenseRisk: overDefenseRisk,
 		Intent:          deriveIntent(categories),
+	}
+}
+
+func computeBanListContribution(result banListResult) int {
+	if !result.HasBanMatch {
+		return 0
+	}
+	contribution := (result.SubstringMatches * banListSubstringScore) +
+		(result.TopicMatches * banListTopicScore) +
+		(result.CompetitorMatches * banListCompetitorScore) +
+		(result.RegexMatches * banListRegexScore)
+	if contribution > banListContributionCap {
+		return banListContributionCap
+	}
+	return contribution
+}
+
+func appendBanListPatternIDs(patternIDs []string, result banListResult) []string {
+	if result.SubstringMatches > 0 {
+		patternIDs = append(patternIDs, banPatternIDSubstring)
+	}
+	if result.TopicMatches > 0 {
+		patternIDs = append(patternIDs, banPatternIDTopic)
+	}
+	if result.CompetitorMatches > 0 {
+		patternIDs = append(patternIDs, banPatternIDCompetitor)
+	}
+	if result.RegexMatches > 0 {
+		patternIDs = append(patternIDs, banPatternIDRegex)
+	}
+	return patternIDs
+}
+
+func appendBanListCategories(catSet map[string]bool, result banListResult) {
+	if result.SubstringMatches > 0 {
+		catSet[banCategorySubstring] = true
+	}
+	if result.TopicMatches > 0 {
+		catSet[banCategoryTopic] = true
+	}
+	if result.CompetitorMatches > 0 {
+		catSet[banCategoryCompetitor] = true
+	}
+	if result.RegexMatches > 0 {
+		catSet[banCategoryRegex] = true
 	}
 }
 

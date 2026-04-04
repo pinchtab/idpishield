@@ -102,6 +102,11 @@ type RiskResult struct {
 	// Categories lists the unique threat categories detected.
 	Categories []string `json:"categories"`
 
+	// BanListMatches contains the specific ban rule matches that fired,
+	// if any. Empty if no ban rules matched.
+	// Example: ["substring:jailbreak", "competitor:OpenAI"]
+	BanListMatches []string `json:"ban_list_matches"`
+
 	// OverDefenseRisk is a heuristic score indicating possible
 	// false-positive risk. Range 0.0 to 1.0. Higher values suggest
 	// the score may be inflated by trigger words appearing in benign
@@ -150,6 +155,7 @@ func SafeResult() RiskResult {
 		Reason:          "No threats detected",
 		Patterns:        []string{},
 		Categories:      []string{},
+		BanListMatches:  []string{},
 		OverDefenseRisk: 0,
 	}
 }

@@ -43,10 +43,14 @@ func main() {
 	demo := flag.Bool("demo", false, "Run a local demo with simulated attack content")
 	flag.Parse()
 
-	client := idpi.New(idpi.Config{
+	client, err := idpi.New(idpi.Config{
 		Mode:       idpi.ModeBalanced,
 		StrictMode: *strict,
 	})
+	if err != nil {
+		fmt.Printf("%sfailed to initialize idpishield: %v%s\n", red, err, reset)
+		return
+	}
 
 	if *demo {
 		runDemo(client)
