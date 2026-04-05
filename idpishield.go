@@ -116,6 +116,13 @@ type Config struct {
 	// If <= 0, a safe default limit is used.
 	MaxDecodedVariants int
 
+	// AllowOutputCode marks code in output as expected and reduces output
+	// code scanner sensitivity to high-risk patterns only.
+	AllowOutputCode bool
+
+	// BanOutputCode flags any code present in output as suspicious.
+	BanOutputCode bool
+
 	// DebiasTriggers enables the trigger-word debias layer to reduce
 	// false positives on benign content containing security-adjacent words.
 	// When nil (not set), defaults to true for ModeBalanced and ModeFast,
@@ -219,6 +226,34 @@ func (s *Shield) AssessContext(ctx context.Context, text, sourceURL string) Risk
 	return s.engine.AssessContext(ctx, text, sourceURL)
 }
 
+// AssessOutput scans LLM response text for output-side risks including
+// system prompt leakage, malicious URLs, PII exposure, harmful code,
+// and response relevance drift. The originalPrompt parameter is the
+// user's original input - used for relevance comparison.
+// Pass an empty string for originalPrompt if not available.
+//
+// Output scanning uses a different scoring model than input scanning:
+// it focuses on what the LLM produced, not what was injected into it.
+func (s *Shield) AssessOutput(text, originalPrompt string) RiskResult {
+	return s.engine.AssessOutput(text, originalPrompt)
+}
+
+// AssessPair scans both the input prompt and the LLM response,
+// returning both results. This is the recommended method for
+// full input->output protection in production LLM applications.
+//
+// Example:
+//
+//	inputResult, outputResult := shield.AssessPair(userInput, llmResponse)
+//	if inputResult.Blocked || outputResult.Blocked {
+//		// reject
+//	}
+func (s *Shield) AssessPair(inputText, outputText string) (inputResult RiskResult, outputResult RiskResult) {
+	inputResult = s.Assess(inputText, "")
+	outputResult = s.AssessOutput(outputText, inputText)
+	return inputResult, outputResult
+}
+
 // CheckDomain evaluates whether a URL's domain is in the configured allowlist.
 // Returns a RiskResult indicating whether the domain is trusted.
 // If no allowlist is configured, always returns safe.
@@ -286,6 +321,8 @@ func toEngineCfg(cfg Config) engine.Config {
 		MaxInputBytes:                  cfg.MaxInputBytes,
 		MaxDecodeDepth:                 cfg.MaxDecodeDepth,
 		MaxDecodedVariants:             cfg.MaxDecodedVariants,
+		AllowOutputCode:                cfg.AllowOutputCode,
+		BanOutputCode:                  cfg.BanOutputCode,
 		DebiasTriggers:                 cfg.DebiasTriggers,
 		BanSubstrings:                  cfg.BanSubstrings,
 		BanTopics:                      cfg.BanTopics,

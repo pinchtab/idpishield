@@ -24,6 +24,8 @@ type Config struct {
 	MaxInputBytes                  int
 	MaxDecodeDepth                 int
 	MaxDecodedVariants             int
+	AllowOutputCode                bool
+	BanOutputCode                  bool
 	DebiasTriggers                 *bool
 	BanSubstrings                  []string
 	BanTopics                      []string
@@ -136,6 +138,11 @@ func (e *Engine) AssessContext(ctx context.Context, text, sourceURL string) Risk
 	}
 
 	return result
+}
+
+// AssessOutput analyzes LLM response text for output-side risks.
+func (e *Engine) AssessOutput(text, originalPrompt string) RiskResult {
+	return assessOutput(text, originalPrompt, e.cfg)
 }
 
 func compileCustomRegex(patterns []string) []*regexp.Regexp {

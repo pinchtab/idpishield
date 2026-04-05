@@ -26,15 +26,22 @@ type overDefenseCase struct {
 }
 
 type scanOutput struct {
-	Score           int         `json:"score"`
-	Level           string      `json:"level"`
-	Blocked         bool        `json:"blocked"`
-	Reason          string      `json:"reason"`
-	Patterns        []string    `json:"patterns"`
-	Categories      []string    `json:"categories"`
-	BanListMatches  []string    `json:"ban_list_matches"`
-	OverDefenseRisk float64     `json:"over_defense_risk"`
-	Intent          idpi.Intent `json:"intent,omitempty"`
+	Score               int         `json:"score"`
+	Level               string      `json:"level"`
+	Blocked             bool        `json:"blocked"`
+	Reason              string      `json:"reason"`
+	Patterns            []string    `json:"patterns"`
+	Categories          []string    `json:"categories"`
+	BanListMatches      []string    `json:"ban_list_matches"`
+	OverDefenseRisk     float64     `json:"over_defense_risk"`
+	IsOutputScan        bool        `json:"is_output_scan"`
+	PIIFound            bool        `json:"pii_found"`
+	PIITypes            []string    `json:"pii_types"`
+	RedactedText        string      `json:"redacted_text"`
+	RelevanceScore      float64     `json:"relevance_score"`
+	CodeDetected        bool        `json:"code_detected"`
+	HarmfulCodePatterns []string    `json:"harmful_code_patterns"`
+	Intent              idpi.Intent `json:"intent,omitempty"`
 }
 
 var overDefenseDataset = []overDefenseCase{
@@ -82,6 +89,11 @@ func main() {
 	case "scan":
 		if err := runScan(os.Args[2:]); err != nil {
 			log.Printf("scan failed: %v", err)
+			os.Exit(2)
+		}
+	case "scan-output":
+		if err := runScanOutput(os.Args[2:]); err != nil {
+			log.Printf("scan-output failed: %v", err)
 			os.Exit(2)
 		}
 	case "test-overdefense":
@@ -310,6 +322,10 @@ func runScan(args []string) error {
 	banCompetitors := fs.String("ban-competitors", "", "comma-separated list of competitor names to ban")
 	customRegex := fs.String("custom-regex", "", "comma-separated list of custom regex patterns to ban")
 	configFile := fs.String("config-file", "", "path to JSON or YAML ban-list config file")
+	asOutput := fs.Bool("as-output", false, "run output scanning pipeline on input text")
+	originalPrompt := fs.String("original-prompt", "", "original prompt text for output relevance comparison")
+	allowOutputCode := fs.Bool("allow-output-code", false, "allow code in output and only flag harmful code")
+	banOutputCode := fs.Bool("ban-output-code", false, "treat any code in output as suspicious")
 
 	if err := fs.Parse(args); err != nil {
 		printUsage(os.Stderr)
@@ -338,6 +354,8 @@ func runScan(args []string) error {
 		BanCompetitors:                 parseCSVList(*banCompetitors),
 		CustomRegex:                    parseCSVList(*customRegex),
 		ConfigFile:                     strings.TrimSpace(*configFile),
+		AllowOutputCode:                *allowOutputCode,
+		BanOutputCode:                  *banOutputCode,
 	}
 	if err := applyProfileDefaults(*profile, &shieldConfig); err != nil {
 		return err
@@ -355,16 +373,88 @@ func runScan(args []string) error {
 	}
 
 	result := shield.Assess(text, *url)
+	if *asOutput {
+		result = shield.AssessOutput(text, *originalPrompt)
+	}
 	output := scanOutput{
-		Score:           result.Score,
-		Level:           result.Level,
-		Blocked:         result.Blocked,
-		Reason:          result.Reason,
-		Patterns:        result.Patterns,
-		Categories:      result.Categories,
-		BanListMatches:  result.BanListMatches,
-		OverDefenseRisk: result.OverDefenseRisk,
-		Intent:          result.Intent,
+		Score:               result.Score,
+		Level:               result.Level,
+		Blocked:             result.Blocked,
+		Reason:              result.Reason,
+		Patterns:            result.Patterns,
+		Categories:          result.Categories,
+		BanListMatches:      result.BanListMatches,
+		OverDefenseRisk:     result.OverDefenseRisk,
+		IsOutputScan:        result.IsOutputScan,
+		PIIFound:            result.PIIFound,
+		PIITypes:            result.PIITypes,
+		RedactedText:        result.RedactedText,
+		RelevanceScore:      result.RelevanceScore,
+		CodeDetected:        result.CodeDetected,
+		HarmfulCodePatterns: result.HarmfulCodePatterns,
+		Intent:              result.Intent,
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(output); err != nil {
+		return err
+	}
+
+	if result.Blocked {
+		os.Exit(1)
+	}
+
+	return nil
+}
+
+func runScanOutput(args []string) error {
+	fs := flag.NewFlagSet("scan-output", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	strict := fs.Bool("strict", false, "enable strict mode (block >= 40)")
+	originalPrompt := fs.String("original-prompt", "", "original prompt text for output relevance comparison")
+	allowOutputCode := fs.Bool("allow-output-code", false, "allow code in output and only flag harmful code")
+	banOutputCode := fs.Bool("ban-output-code", false, "treat any code in output as suspicious")
+
+	if err := fs.Parse(args); err != nil {
+		printUsage(os.Stderr)
+		return err
+	}
+
+	text, err := readInput(fs.Args())
+	if err != nil {
+		return err
+	}
+
+	shield, err := idpi.New(idpi.Config{
+		Mode:            idpi.ModeBalanced,
+		StrictMode:      *strict,
+		AllowOutputCode: *allowOutputCode,
+		BanOutputCode:   *banOutputCode,
+	})
+	if err != nil {
+		return err
+	}
+
+	result := shield.AssessOutput(text, *originalPrompt)
+	output := scanOutput{
+		Score:               result.Score,
+		Level:               result.Level,
+		Blocked:             result.Blocked,
+		Reason:              result.Reason,
+		Patterns:            result.Patterns,
+		Categories:          result.Categories,
+		BanListMatches:      result.BanListMatches,
+		OverDefenseRisk:     result.OverDefenseRisk,
+		IsOutputScan:        result.IsOutputScan,
+		PIIFound:            result.PIIFound,
+		PIITypes:            result.PIITypes,
+		RedactedText:        result.RedactedText,
+		RelevanceScore:      result.RelevanceScore,
+		CodeDetected:        result.CodeDetected,
+		HarmfulCodePatterns: result.HarmfulCodePatterns,
+		Intent:              result.Intent,
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -445,11 +535,13 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage:")
 	fmt.Fprintln(w, "  idpishield scan [file|-] --mode balanced --domains example.com,google.com")
+	fmt.Fprintln(w, "  idpishield scan-output [file|-] --original-prompt \"user prompt\"")
 	fmt.Fprintln(w, "  idpishield test-overdefense")
 	fmt.Fprintln(w, "  idpishield mcp serve [--transport stdio|http] [flags]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	fmt.Fprintln(w, "  scan    Assess input from file path or stdin and emit JSON risk result")
+	fmt.Fprintln(w, "  scan-output  Assess LLM response text and emit output-scan JSON risk result")
 	fmt.Fprintln(w, "  test-overdefense  Run built-in benign sentence suite to estimate over-defense rate")
 	fmt.Fprintln(w, "  mcp     Run MCP server (stdio by default) exposing tool: idpi_assess")
 	fmt.Fprintln(w)
@@ -471,6 +563,16 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --ban-competitors       comma-separated list of competitor names to ban")
 	fmt.Fprintln(w, "  --custom-regex          comma-separated list of regex patterns to ban")
 	fmt.Fprintln(w, "  --config-file           path to JSON/YAML ban-list configuration")
+	fmt.Fprintln(w, "  --as-output             run output scanning pipeline on input text")
+	fmt.Fprintln(w, "  --original-prompt       original prompt text used for output relevance comparison")
+	fmt.Fprintln(w, "  --allow-output-code     allow code in output and only flag harmful code")
+	fmt.Fprintln(w, "  --ban-output-code       treat any code in output as suspicious")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "scan-output flags:")
+	fmt.Fprintln(w, "  --strict               block at score >= 40 instead of >= 60")
+	fmt.Fprintln(w, "  --original-prompt      original prompt text used for output relevance comparison")
+	fmt.Fprintln(w, "  --allow-output-code    allow code in output and only flag harmful code")
+	fmt.Fprintln(w, "  --ban-output-code      treat any code in output as suspicious")
 }
 
 //nolint:errcheck // usage output — errors are not actionable

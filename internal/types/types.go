@@ -113,6 +113,31 @@ type RiskResult struct {
 	// context rather than representing a calibrated probability.
 	OverDefenseRisk float64 `json:"over_defense_risk"`
 
+	// IsOutputScan indicates this result was produced by AssessOutput.
+	IsOutputScan bool `json:"is_output_scan"`
+
+	// PIIFound indicates PII was detected in the output.
+	PIIFound bool `json:"pii_found"`
+
+	// PIITypes lists the types of PII detected (e.g. ["email", "phone"]).
+	PIITypes []string `json:"pii_types"`
+
+	// RedactedText contains the output text with PII replaced by
+	// type tags (e.g. [REDACTED-EMAIL]). Empty if no PII detected.
+	// Useful for safe logging and audit trails.
+	RedactedText string `json:"redacted_text"`
+
+	// RelevanceScore is the keyword overlap ratio between the LLM response
+	// and original prompt. Range 0.0 to 1.0. Only populated for output scans
+	// when originalPrompt was provided. -1.0 means not computed.
+	RelevanceScore float64 `json:"relevance_score"`
+
+	// CodeDetected indicates code was found in the LLM response.
+	CodeDetected bool `json:"code_detected"`
+
+	// HarmfulCodePatterns lists which harmful code patterns fired.
+	HarmfulCodePatterns []string `json:"harmful_code_patterns"`
+
 	// Intent classifies the primary attacker goal. Empty when no threat is detected.
 	Intent Intent `json:"intent,omitempty"`
 }
@@ -149,13 +174,20 @@ func ShouldBlock(score int, strict bool, customThreshold ...int) bool {
 // SafeResult returns a clean RiskResult with no threats detected.
 func SafeResult() RiskResult {
 	return RiskResult{
-		Score:           0,
-		Level:           "safe",
-		Blocked:         false,
-		Reason:          "No threats detected",
-		Patterns:        []string{},
-		Categories:      []string{},
-		BanListMatches:  []string{},
-		OverDefenseRisk: 0,
+		Score:               0,
+		Level:               "safe",
+		Blocked:             false,
+		Reason:              "No threats detected",
+		Patterns:            []string{},
+		Categories:          []string{},
+		BanListMatches:      []string{},
+		OverDefenseRisk:     0,
+		IsOutputScan:        false,
+		PIIFound:            false,
+		PIITypes:            []string{},
+		RedactedText:        "",
+		RelevanceScore:      -1.0,
+		CodeDetected:        false,
+		HarmfulCodePatterns: []string{},
 	}
 }
