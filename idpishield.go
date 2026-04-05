@@ -294,3 +294,30 @@ func toEngineCfg(cfg Config) engine.Config {
 		ConfigFile:                     cfg.ConfigFile,
 	}
 }
+
+// InjectCanary appends a unique hidden canary token to the prompt.
+// The caller must store the returned token and pass it to CheckCanary
+// after receiving the LLM response.
+//
+// Returns the augmented prompt and the injected token.
+// Returns an error only if the system's random source fails.
+//
+// Example usage:
+//
+//	augmented, token, err := shield.InjectCanary(myPrompt)
+//	if err != nil { ... }
+//	response := callLLM(augmented)
+//	result := shield.CheckCanary(response, token)
+//	if result.Found {
+//		log.Println("canary detected in response: possible goal hijacking")
+//	}
+func (s *Shield) InjectCanary(prompt string) (injectedPrompt string, token string, err error) {
+	return injectCanary(prompt)
+}
+
+// CheckCanary scans the LLM response for the canary token returned by InjectCanary.
+// Returns a CanaryResult with Found=true if the token appears in the response,
+// which indicates prompt leakage or goal hijacking.
+func (s *Shield) CheckCanary(response, token string) CanaryResult {
+	return checkCanary(response, token)
+}

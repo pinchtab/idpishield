@@ -167,3 +167,116 @@ func TestAssessMaxInputBytesKeepsTailContext(t *testing.T) {
 		t.Fatalf("expected detection with bounded analysis input, got %+v", result)
 	}
 }
+
+func TestInjectCanaryAddsToken(t *testing.T) {
+	s, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned unexpected error: %v", err)
+	}
+
+	prompt := "Summarise this document."
+	augmented, token, err := s.InjectCanary(prompt)
+	if err != nil {
+		t.Fatalf("InjectCanary returned unexpected error: %v", err)
+	}
+	if token == "" {
+		t.Fatal("expected non-empty token")
+	}
+	if !strings.Contains(augmented, token) {
+		t.Fatalf("augmented prompt does not contain the canary token: token=%q", token)
+	}
+	if !strings.Contains(augmented, prompt) {
+		t.Fatal("augmented prompt must still contain the original prompt text")
+	}
+}
+
+func TestInjectCanaryTokenIsUnique(t *testing.T) {
+	s, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned unexpected error: %v", err)
+	}
+
+	_, token1, err := s.InjectCanary("prompt")
+	if err != nil {
+		t.Fatalf("first InjectCanary error: %v", err)
+	}
+	_, token2, err := s.InjectCanary("prompt")
+	if err != nil {
+		t.Fatalf("second InjectCanary error: %v", err)
+	}
+	if token1 == token2 {
+		t.Fatalf("expected unique tokens across calls, both were %q", token1)
+	}
+}
+
+func TestCheckCanaryNotFound(t *testing.T) {
+	s, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned unexpected error: %v", err)
+	}
+
+	_, token, err := s.InjectCanary("some prompt")
+	if err != nil {
+		t.Fatalf("InjectCanary error: %v", err)
+	}
+
+	result := s.CheckCanary("This is a perfectly normal LLM response.", token)
+	if result.Found {
+		t.Fatal("canary must NOT be found in a clean response")
+	}
+	if result.Token != token {
+		t.Fatalf("result.Token mismatch: want %q got %q", token, result.Token)
+	}
+}
+
+func TestCheckCanaryFound(t *testing.T) {
+	s, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned unexpected error: %v", err)
+	}
+
+	_, token, err := s.InjectCanary("some prompt")
+	if err != nil {
+		t.Fatalf("InjectCanary error: %v", err)
+	}
+
+	// Simulate an LLM that leaked the canary back (goal hijacking).
+	leakyResponse := "Here is my answer. Internal marker: " + token
+	result := s.CheckCanary(leakyResponse, token)
+	if !result.Found {
+		t.Fatalf("expected canary to be detected in leaky response, token=%q", token)
+	}
+}
+
+func TestCheckCanaryEmptyTokenNeverFound(t *testing.T) {
+	s, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned unexpected error: %v", err)
+	}
+
+	// Even if the response contains something that looks like a canary,
+	// an empty token must never report found.
+	result := s.CheckCanary("response containing <!--CANARY-abc123-->", "")
+	if result.Found {
+		t.Fatal("empty token must never produce Found=true")
+	}
+}
+
+func TestCheckCanary_PartialMatchShouldFail(t *testing.T) {
+	s, err := New(Config{})
+	if err != nil {
+		t.Fatalf("New returned unexpected error: %v", err)
+	}
+
+	_, token, err := s.InjectCanary("some prompt")
+	if err != nil {
+		t.Fatalf("InjectCanary error: %v", err)
+	}
+
+	partial := strings.TrimSuffix(strings.TrimPrefix(token, canaryPrefix), canarySuffix)
+	response := "response containing only partial token: " + partial
+	result := s.CheckCanary(response, token)
+	if result.Found {
+		t.Fatalf("expected partial token match to fail, token=%q partial=%q", token, partial)
+	}
+}
