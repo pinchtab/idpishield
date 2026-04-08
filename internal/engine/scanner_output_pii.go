@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"net"
 	"regexp"
 	"sort"
 	"strings"
@@ -159,14 +160,41 @@ func addOutputPIIIPMatches(text string, ranges [][2]int, add func(m piiMatch, co
 		add(piiMatch{Type: "ip-address", Value: text[loc[0]:loc[1]], Start: loc[0], End: loc[1]}, outputPIIConfidenceMedium)
 	}
 	for _, loc := range outputPIIPublicIPPattern.FindAllStringIndex(text, -1) {
-		if outputPIIPrivateIPPattern.MatchString(text[loc[0]:loc[1]]) {
+		candidate := text[loc[0]:loc[1]]
+		if outputPIIPrivateIPPattern.MatchString(candidate) {
+			continue
+		}
+		if !isValidOutputPublicIPv4(candidate) {
 			continue
 		}
 		if isOutputPIIIgnoredContext(text, loc[0], ranges) {
 			continue
 		}
-		add(piiMatch{Type: "ip-address", Value: text[loc[0]:loc[1]], Start: loc[0], End: loc[1]}, outputPIIConfidenceMedium)
+		add(piiMatch{Type: "ip-address", Value: candidate, Start: loc[0], End: loc[1]}, outputPIIConfidenceMedium)
 	}
+}
+
+func isValidOutputPublicIPv4(candidate string) bool {
+	ip := net.ParseIP(strings.TrimSpace(candidate))
+	if ip == nil {
+		return false
+	}
+	v4 := ip.To4()
+	if v4 == nil {
+		return false
+	}
+
+	if v4[0] == 10 {
+		return false
+	}
+	if v4[0] == 172 && v4[1] >= 16 && v4[1] <= 31 {
+		return false
+	}
+	if v4[0] == 192 && v4[1] == 168 {
+		return false
+	}
+
+	return true
 }
 
 // addOutputPIINamePatternSignal adds a low-confidence name-pattern signal only with other PII present.
@@ -297,8 +325,8 @@ func redactPIIText(text string, details []piiMatch) string {
 
 // redactOutputSecrets redacts secret-like assignments and known key prefixes.
 func redactOutputSecrets(text string) string {
-	out := outputPIISecretAssignmentPattern.ReplaceAllString(text, "[REDACTED-KEY]")
-	out = outputPIISecretPrefixPattern.ReplaceAllString(out, "[REDACTED-KEY]")
+	out := outputPIISecretAssignmentPattern.ReplaceAllString(text, "[REDACTED-API-KEY]")
+	out = outputPIISecretPrefixPattern.ReplaceAllString(out, "[REDACTED-API-KEY]")
 	return out
 }
 
@@ -310,12 +338,12 @@ func piiRedactionTag(t string) string {
 	case "ssn":
 		return "[REDACTED-SSN]"
 	case "credit-card":
-		return "[REDACTED-CC]"
+		return "[REDACTED-CREDIT-CARD]"
 	case "phone":
 		return "[REDACTED-PHONE]"
 	case "ip-address":
-		return "[REDACTED-IP]"
+		return "[REDACTED-IP-ADDRESS]"
 	default:
-		return "[REDACTED-KEY]"
+		return "[REDACTED-API-KEY]"
 	}
 }

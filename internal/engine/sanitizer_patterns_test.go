@@ -21,8 +21,8 @@ func TestLuhnCheck_InvalidNumber(t *testing.T) {
 }
 
 func TestLuhnCheck_AllZeros(t *testing.T) {
-	if !luhnCheck("0000000000000000") {
-		t.Fatal("expected all-zeros string to pass luhn math")
+	if luhnCheck("0000000000000000") {
+		t.Fatal("expected all-zeros string to be rejected")
 	}
 }
 

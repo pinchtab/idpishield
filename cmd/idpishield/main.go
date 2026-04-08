@@ -403,7 +403,11 @@ func runScan(args []string) error {
 	var cleanText string
 	var redactions []idpi.Redaction
 	if *sanitize {
-		cleanText, redactions, err = shield.Sanitize(text, nil)
+		if *asOutput {
+			cleanText, redactions, err = shield.SanitizeOutput(text, nil)
+		} else {
+			cleanText, redactions, err = shield.Sanitize(text, nil)
+		}
 		if err != nil {
 			return err
 		}

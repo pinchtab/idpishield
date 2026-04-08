@@ -37,6 +37,7 @@ const (
 	redactionTypeAPIKey     redactionType = "api-key"
 	redactionTypeIPAddress  redactionType = "ip-address"
 	redactionTypeURL        redactionType = "url"
+	redactionTypeName       redactionType = "name"
 	redactionTypeCustom     redactionType = "custom"
 )
 
@@ -196,7 +197,7 @@ func addNameMatchesWhenPIIPresent(text string, matches []redactionMatch) []redac
 		matches = append(matches, redactionMatch{
 			Start:    loc[0],
 			End:      loc[1],
-			Type:     redactionTypeCustom,
+			Type:     redactionTypeName,
 			Original: text[loc[0]:loc[1]],
 			Priority: sanitizePriorityName,
 		})

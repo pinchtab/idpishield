@@ -59,6 +59,9 @@ func luhnCheck(s string) bool {
 	if clean == "" {
 		return false
 	}
+	if allDigitsSame(clean) {
+		return false
+	}
 
 	sum := 0
 	double := false
@@ -79,6 +82,19 @@ func luhnCheck(s string) bool {
 	}
 
 	return sum%10 == 0
+}
+
+func allDigitsSame(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	first := s[0]
+	for i := 1; i < len(s); i++ {
+		if s[i] != first {
+			return false
+		}
+	}
+	return true
 }
 
 func isValidIPOctet(s string) bool {

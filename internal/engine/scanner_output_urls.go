@@ -27,7 +27,7 @@ var outputURLPattern = regexp.MustCompile(`https?://[^\s<>"{}|\\^` + "`" + `\[\]
 var outputSuspiciousBareDomainPattern = regexp.MustCompile(`\b(?:[a-zA-Z0-9-]+\.)+(?:xyz|tk|ml|ga|cf|gq|pw|top|click|download|zip)\b`)
 var outputIPURLPattern = regexp.MustCompile(`(?i)^https?://\d{1,3}(?:\.\d{1,3}){3}`)
 var outputDataSchemePattern = regexp.MustCompile(`(?i)data:[^;]+;base64`)
-var outputNonStandardPortPattern = regexp.MustCompile(`(?i)^https?://[^/]+:(\d{2,5})/`)
+var outputNonStandardPortPattern = regexp.MustCompile(`(?i)^https?://[^/]+:(\d{2,5})(?:/|\?|#|$)`)
 var outputEncodedPathPattern = regexp.MustCompile(`(?:%[0-9a-fA-F]{2}){4,}`)
 
 var outputSuspiciousPathKeywords = []string{

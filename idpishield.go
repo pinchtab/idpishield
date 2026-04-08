@@ -180,6 +180,7 @@ const (
 	RedactionTypeAPIKey     RedactionType = "api-key"
 	RedactionTypeIPAddress  RedactionType = "ip-address"
 	RedactionTypeURL        RedactionType = "url"
+	RedactionTypeName       RedactionType = "name"
 	RedactionTypeCustom     RedactionType = "custom"
 )
 
