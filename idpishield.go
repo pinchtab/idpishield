@@ -169,6 +169,99 @@ type Config struct {
 	ConfigFile string
 }
 
+// RedactionType identifies what kind of content was redacted.
+type RedactionType string
+
+const (
+	RedactionTypeEmail      RedactionType = "email"
+	RedactionTypePhone      RedactionType = "phone"
+	RedactionTypeSSN        RedactionType = "ssn"
+	RedactionTypeCreditCard RedactionType = "credit-card"
+	RedactionTypeAPIKey     RedactionType = "api-key"
+	RedactionTypeIPAddress  RedactionType = "ip-address"
+	RedactionTypeURL        RedactionType = "url"
+	RedactionTypeCustom     RedactionType = "custom"
+)
+
+// Redaction describes a single piece of content that was removed
+// or replaced during sanitization.
+type Redaction struct {
+	// Type is the category of redacted content.
+	Type RedactionType
+
+	// Original is the original text that was replaced.
+	// May be empty if RetainOriginal is false in SanitizeConfig.
+	Original string
+
+	// Replacement is the tag that replaced the original text.
+	// Example: "[REDACTED-EMAIL]"
+	Replacement string
+
+	// Start is the byte offset of the original match in the input text.
+	Start int
+
+	// End is the byte offset immediately after the match.
+	End int
+}
+
+// SanitizeConfig controls sanitization behavior.
+type SanitizeConfig struct {
+	// RetainOriginal controls whether Redaction.Original is populated.
+	// Set to false in high-security environments to avoid storing
+	// the sensitive value even in memory.
+	// Default: true
+	RetainOriginal bool
+
+	// RedactEmails removes email addresses. Default: true
+	RedactEmails bool
+
+	// RedactPhones removes phone numbers. Default: true
+	RedactPhones bool
+
+	// RedactSSNs removes Social Security Numbers. Default: true
+	RedactSSNs bool
+
+	// RedactCreditCards removes credit card numbers. Default: true
+	RedactCreditCards bool
+
+	// RedactAPIKeys removes API keys and tokens. Default: true
+	RedactAPIKeys bool
+
+	// RedactIPAddresses removes IP addresses. Default: false
+	// Disabled by default because IPs appear legitimately in many contexts.
+	RedactIPAddresses bool
+
+	// RedactURLs removes or masks URLs. Default: false
+	// Disabled by default because URLs are common in legitimate text.
+	RedactURLs bool
+
+	// CustomPatterns is a list of additional regex patterns to redact.
+	// Each pattern should use one capture group when only part of the
+	// match should be replaced.
+	CustomPatterns []string
+
+	// ReplacementFormat controls how redactions are formatted.
+	// Default: "[REDACTED-%s]" where %s is the uppercase type name.
+	ReplacementFormat string
+}
+
+// DefaultSanitizeConfig returns a SanitizeConfig with safe defaults.
+// Emails, phones, SSNs, credit cards, and API keys are redacted.
+// IP addresses and URLs are not redacted by default.
+func DefaultSanitizeConfig() SanitizeConfig {
+	return SanitizeConfig{
+		RetainOriginal:    true,
+		RedactEmails:      true,
+		RedactPhones:      true,
+		RedactSSNs:        true,
+		RedactCreditCards: true,
+		RedactAPIKeys:     true,
+		RedactIPAddresses: false,
+		RedactURLs:        false,
+		ReplacementFormat: "[REDACTED-%s]",
+	}
+}
+
 // Shield is the main entry point for idpishield analysis.
 // Safe for concurrent use by multiple goroutines.
 type Shield struct {
@@ -252,6 +345,54 @@ func (s *Shield) AssessPair(inputText, outputText string) (inputResult RiskResul
 	inputResult = s.Assess(inputText, "")
 	outputResult = s.AssessOutput(outputText, inputText)
 	return inputResult, outputResult
+}
+
+// Sanitize scans text for sensitive content and returns a cleaned
+// version with sensitive data replaced by type tags.
+// Uses DefaultSanitizeConfig if cfg is nil.
+func (s *Shield) Sanitize(text string, cfg *SanitizeConfig) (cleanText string, redactions []Redaction, err error) {
+	var engineCfg *engine.SanitizeConfig
+	if cfg != nil {
+		resolved := toEngineSanitizeConfig(*cfg)
+		engineCfg = &resolved
+	}
+
+	cleanText, engineRedactions, err := s.engine.Sanitize(text, engineCfg)
+	if err != nil {
+		return "", nil, err
+	}
+	return cleanText, toPublicRedactions(engineRedactions), nil
+}
+
+// SanitizeAndAssess scans text, sanitizes it, and returns a risk assessment.
+// The risk assessment runs on the original text.
+func (s *Shield) SanitizeAndAssess(text string, cfg *SanitizeConfig) (cleanText string, redactions []Redaction, result RiskResult, err error) {
+	var engineCfg *engine.SanitizeConfig
+	if cfg != nil {
+		resolved := toEngineSanitizeConfig(*cfg)
+		engineCfg = &resolved
+	}
+
+	cleanText, engineRedactions, result, err := s.engine.SanitizeAndAssess(text, engineCfg)
+	if err != nil {
+		return "", nil, RiskResult{}, err
+	}
+	return cleanText, toPublicRedactions(engineRedactions), result, nil
+}
+
+// SanitizeOutput is identical to Sanitize but tuned for LLM output text.
+func (s *Shield) SanitizeOutput(text string, cfg *SanitizeConfig) (cleanText string, redactions []Redaction, err error) {
+	var engineCfg *engine.SanitizeConfig
+	if cfg != nil {
+		resolved := toEngineSanitizeConfig(*cfg)
+		engineCfg = &resolved
+	}
+
+	cleanText, engineRedactions, err := s.engine.SanitizeOutput(text, engineCfg)
+	if err != nil {
+		return "", nil, err
+	}
+	return cleanText, toPublicRedactions(engineRedactions), nil
 }
 
 // CheckDomain evaluates whether a URL's domain is in the configured allowlist.
@@ -357,4 +498,33 @@ func toEngineCfg(cfg Config) engine.Config {
 		CustomRegex:                    cfg.CustomRegex,
 		ConfigFile:                     cfg.ConfigFile,
 	}
+}
+
+func toEngineSanitizeConfig(cfg SanitizeConfig) engine.SanitizeConfig {
+	return engine.SanitizeConfig{
+		RetainOriginal:    cfg.RetainOriginal,
+		RedactEmails:      cfg.RedactEmails,
+		RedactPhones:      cfg.RedactPhones,
+		RedactSSNs:        cfg.RedactSSNs,
+		RedactCreditCards: cfg.RedactCreditCards,
+		RedactAPIKeys:     cfg.RedactAPIKeys,
+		RedactIPAddresses: cfg.RedactIPAddresses,
+		RedactURLs:        cfg.RedactURLs,
+		CustomPatterns:    cfg.CustomPatterns,
+		ReplacementFormat: cfg.ReplacementFormat,
+	}
+}
+
+func toPublicRedactions(in []engine.Redaction) []Redaction {
+	out := make([]Redaction, 0, len(in))
+	for _, r := range in {
+		out = append(out, Redaction{
+			Type:        RedactionType(r.Type),
+			Original:    r.Original,
+			Replacement: r.Replacement,
+			Start:       r.Start,
+			End:         r.End,
+		})
+	}
+	return out
 }
