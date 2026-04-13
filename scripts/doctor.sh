@@ -174,6 +174,44 @@ fi
 
 section "Optional Tools"
 
+# ── gotestsum (for better test output) ──────────────────────────────
+
+TOOLS_BIN="$ROOT_DIR/.tools/bin"
+GOTESTSUM_FOUND=false
+
+if command -v gotestsum &>/dev/null; then
+  GOTESTSUM_FOUND=true
+  ok "gotestsum $(gotestsum --version 2>/dev/null | head -1)"
+elif [ -x "$TOOLS_BIN/gotestsum" ]; then
+  GOTESTSUM_FOUND=true
+  ok "gotestsum (local .tools/bin)"
+elif [ -x "$(go env GOPATH 2>/dev/null)/bin/gotestsum" ]; then
+  GOTESTSUM_FOUND=true
+  ok "gotestsum (GOPATH/bin)"
+fi
+
+if ! $GOTESTSUM_FOUND; then
+  warn "gotestsum not found" "Optional — provides cleaner test output."
+  if command -v go &>/dev/null && confirm "Install gotestsum via go install?"; then
+    go install gotest.tools/gotestsum@latest && ok "gotestsum installed" && WARNINGS=$((WARNINGS - 1))
+  else
+    hint "go install gotest.tools/gotestsum@latest"
+  fi
+fi
+
+# ── jq (for test summary parsing) ───────────────────────────────────
+
+if command -v jq &>/dev/null; then
+  ok "jq $(jq --version 2>/dev/null)"
+else
+  warn "jq not found" "Optional — needed for test summary when gotestsum unavailable."
+  if $HAS_BREW && confirm "Install jq via brew?"; then
+    brew install jq && ok "jq installed" && WARNINGS=$((WARNINGS - 1))
+  else
+    hint "brew install jq"
+  fi
+fi
+
 # ── Docker (for E2E) ────────────────────────────────────────────────
 
 if command -v docker &>/dev/null; then
