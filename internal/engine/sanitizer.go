@@ -57,13 +57,13 @@ type sanitizeConfig struct {
 	RedactCreditCards bool
 	RedactAPIKeys     bool
 	RedactIPAddresses bool
+	RedactNames       bool
 	RedactURLs        bool
 	CustomPatterns    []string
 	ReplacementFormat string
 
 	RequirePhoneContext bool
 	RequireSSNContext   bool
-	EnableNamePatterns  bool
 }
 
 type redactionMatch struct {
@@ -84,11 +84,11 @@ func defaultSanitizeConfig() sanitizeConfig {
 		RedactCreditCards:   true,
 		RedactAPIKeys:       true,
 		RedactIPAddresses:   true,
+		RedactNames:         false,
 		RedactURLs:          false,
 		ReplacementFormat:   defaultReplacementFormat,
 		RequirePhoneContext: true,
 		RequireSSNContext:   true,
-		EnableNamePatterns:  false,
 	}
 }
 
@@ -97,7 +97,6 @@ func defaultOutputSanitizeConfig() sanitizeConfig {
 	cfg.RedactURLs = true
 	cfg.RequirePhoneContext = false
 	cfg.RequireSSNContext = false
-	cfg.EnableNamePatterns = true
 	return cfg
 }
 
@@ -122,7 +121,7 @@ func sanitize(text string, cfg sanitizeConfig) (string, []redaction, error) {
 	matches = append(matches, collectEnabledMatches(tracked.Value, cfg, patterns)...)
 	resolved := resolveOverlaps(matches)
 
-	if cfg.EnableNamePatterns {
+	if cfg.RedactNames {
 		resolved = addNameMatchesWhenPIIPresent(tracked.Value, resolved)
 		resolved = resolveOverlaps(resolved)
 	}
@@ -186,25 +185,100 @@ func collectEnabledMatches(text string, cfg sanitizeConfig, patterns []*regexp.R
 }
 
 func addNameMatchesWhenPIIPresent(text string, matches []redactionMatch) []redactionMatch {
-	types := make(map[redactionType]struct{}, len(matches))
-	for _, m := range matches {
-		types[m.Type] = struct{}{}
-	}
-	if len(types) < sanitizeNameMinOtherTypes {
-		return matches
-	}
-
 	for _, loc := range reNamePair.FindAllStringIndex(text, -1) {
+		candidate := text[loc[0]:loc[1]]
+		if isPlaceholderName(candidate) {
+			continue
+		}
+		if !shouldRedactName(text, loc[0], loc[1], matches) {
+			continue
+		}
 		matches = append(matches, redactionMatch{
 			Start:    loc[0],
 			End:      loc[1],
 			Type:     redactionTypeName,
-			Original: text[loc[0]:loc[1]],
+			Original: candidate,
 			Priority: sanitizePriorityName,
 		})
 	}
 
 	return matches
+}
+
+func shouldRedactName(text string, start, end int, matches []redactionMatch) bool {
+	if hasNameLabelPrefix(text, start) {
+		return true
+	}
+
+	strongPIICount := countStrongPIINearName(text, start, end, matches)
+	return strongPIICount >= sanitizeNameMinOtherTypes
+}
+
+func isPlaceholderName(name string) bool {
+	_, ok := sanitizeNamePlaceholderAllowlist[strings.ToLower(strings.TrimSpace(name))]
+	return ok
+}
+
+func hasNameLabelPrefix(text string, start int) bool {
+	lineStart := strings.LastIndex(text[:start], "\n") + 1
+	prefix := strings.TrimSpace(strings.ToLower(text[lineStart:start]))
+	return sanitizeNameLabelPattern.MatchString(prefix)
+}
+
+func countStrongPIINearName(text string, start, end int, matches []redactionMatch) int {
+	count := 0
+	lineStart, lineEnd := surroundingLineBounds(text, start, end)
+	sentenceStart, sentenceEnd := surroundingSentenceBounds(text, start, end)
+
+	for _, m := range matches {
+		if !isStrongNameContextType(m.Type) {
+			continue
+		}
+		if rangesOverlap(m.Start, m.End, start, end) {
+			continue
+		}
+		if rangesOverlap(m.Start, m.End, lineStart, lineEnd) || rangesOverlap(m.Start, m.End, sentenceStart, sentenceEnd) {
+			count++
+		}
+	}
+
+	return count
+}
+
+func isStrongNameContextType(t redactionType) bool {
+	switch t {
+	case redactionTypeEmail, redactionTypePhone, redactionTypeSSN, redactionTypeCreditCard, redactionTypeAPIKey, redactionTypeIPAddress:
+		return true
+	default:
+		return false
+	}
+}
+
+func surroundingLineBounds(text string, start, end int) (int, int) {
+	lineStart := strings.LastIndex(text[:start], "\n") + 1
+	lineEndOffset := strings.Index(text[end:], "\n")
+	if lineEndOffset < 0 {
+		return lineStart, len(text)
+	}
+	return lineStart, end + lineEndOffset
+}
+
+func surroundingSentenceBounds(text string, start, end int) (int, int) {
+	sentenceStart := strings.LastIndexAny(text[:start], ".!?\n")
+	if sentenceStart < 0 {
+		sentenceStart = 0
+	} else {
+		sentenceStart++
+	}
+	sentenceEndOffset := strings.IndexAny(text[end:], ".!?\n")
+	if sentenceEndOffset < 0 {
+		return sentenceStart, len(text)
+	}
+	return sentenceStart, end + sentenceEndOffset
+}
+
+func rangesOverlap(leftStart, leftEnd, rightStart, rightEnd int) bool {
+	return leftStart < rightEnd && rightStart < leftEnd
 }
 
 func findEmailMatches(text string) []redactionMatch {

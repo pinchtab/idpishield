@@ -61,6 +61,7 @@ func main() {
 | RedactCreditCards | true | Redact credit card numbers |
 | RedactAPIKeys | true | Redact detected high-confidence API keys and tokens |
 | RedactIPAddresses | true | Redact IPv4 addresses |
+| RedactNames | false | Redact person-name pairs when explicit name heuristics match |
 | RedactURLs | false | Redact URLs |
 | CustomPatterns | empty | Extra regex patterns for redaction |
 | ReplacementFormat | [REDACTED-%s] | Format string for replacement tags |
@@ -77,6 +78,7 @@ Use idpishield.DefaultSanitizeConfig() to start from recommended defaults.
 | Credit Card | credit-card |
 | API Key | api-key |
 | IP Address | ip-address |
+| Name | name |
 | URL | url |
 | Custom | custom |
 
@@ -123,7 +125,12 @@ SanitizeOutput differences:
 - Phone detection does not require context keywords.
 - SSN detection does not require context keywords.
 - URL redaction is enabled by default.
-- Name-pair redaction can activate when other PII is present.
+
+Name redaction is opt-in via `RedactNames`.
+When enabled, names are only redacted when explicit heuristics match, such as a
+label prefix (`name:`, `customer:`, `patient:`, `employee:`) or stronger nearby
+PII on the same line or sentence. Placeholder names such as `John Doe` and
+`Jane Doe` are skipped.
 
 ## Luhn Validation
 
@@ -147,6 +154,12 @@ Output-mode sanitization:
 
 ```bash
 echo "Response includes admin@internal.com" | idpishield sanitize --output-mode
+```
+
+Enable opt-in name redaction:
+
+```bash
+echo "Customer: Alice Smith, email alice@example.com" | idpishield sanitize --redact-names
 ```
 
 Run scan and sanitization together:

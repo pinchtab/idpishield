@@ -96,6 +96,31 @@ func TestSanitize_EndToEnd_DefaultConfigRedactsIP(t *testing.T) {
 	}
 }
 
+func TestSanitize_EndToEnd_DefaultConfigDoesNotRedactNames(t *testing.T) {
+	shield := mustNewShield(t, idpishield.Config{Mode: idpishield.ModeBalanced})
+	cleanText, _, err := shield.Sanitize("Customer: Alice Smith, email alice@example.com", nil)
+	if err != nil {
+		t.Fatalf("sanitize failed: %v", err)
+	}
+	if strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected names preserved by default, got %q", cleanText)
+	}
+}
+
+func TestSanitize_EndToEnd_ExplicitNameRedaction(t *testing.T) {
+	shield := mustNewShield(t, idpishield.Config{Mode: idpishield.ModeBalanced})
+	cfg := idpishield.DefaultSanitizeConfig()
+	cfg.RedactNames = true
+
+	cleanText, _, err := shield.Sanitize("Customer: Alice Smith, email alice@example.com", &cfg)
+	if err != nil {
+		t.Fatalf("sanitize failed: %v", err)
+	}
+	if !strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected explicit name redaction, got %q", cleanText)
+	}
+}
+
 func TestSanitizeAndAssess_AttackWithPII(t *testing.T) {
 	shield := mustNewShield(t, idpishield.Config{Mode: idpishield.ModeBalanced})
 	cleanText, _, result, err := shield.SanitizeAndAssess(

@@ -38,6 +38,8 @@ var rePhonePrefix = regexp.MustCompile(`(?i)(?:phone|tel|mobile|cell|contact|cal
 
 var reNamePair = regexp.MustCompile(`\b[A-Z][a-z]+ [A-Z][a-z]+\b`)
 
+var sanitizeNameLabelPattern = regexp.MustCompile(`(?:^|[\s,;|])(?:name|customer|patient|employee)\s*:\s*$`)
+
 var sanitizeDocEmailAllowlist = map[string]struct{}{
 	"example@example.com": {},
 	"user@example.com":    {},
@@ -46,6 +48,11 @@ var sanitizeDocEmailAllowlist = map[string]struct{}{
 	"foo@bar.com":         {},
 	"name@email.com":      {},
 	"email@provider.com":  {},
+}
+
+var sanitizeNamePlaceholderAllowlist = map[string]struct{}{
+	"john doe": {},
+	"jane doe": {},
 }
 
 var sanitizePhoneContextWords = []string{"phone", "call", "mobile", "cell", "tel", "contact", "reach", "text", "sms", "number", "fax", "dial"}

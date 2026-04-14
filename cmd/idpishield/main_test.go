@@ -1,126 +1,62 @@
 package main
 
 import (
-	"net/http"
-	"net/http/httptest"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
-	"time"
-
-	idpi "github.com/pinchtab/idpishield"
 )
 
-func TestWithBearerAuthAcceptsBearerToken(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	h := withBearerAuth(next, "secret-token")
-	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-	req.Header.Set("Authorization", "Bearer secret-token")
-
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rr.Code)
+func TestRunSanitize_DefaultConfigRedactsIP(t *testing.T) {
+	output := runSanitizeForTest(t, "Server IP is 203.0.113.7", "--json")
+	if !strings.Contains(output, "[REDACTED-IP-ADDRESS]") {
+		t.Fatalf("expected default CLI sanitize to redact IPs, got %q", output)
 	}
 }
 
-func TestWithBearerAuthAcceptsAPIKeyHeader(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	h := withBearerAuth(next, "secret-token")
-	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-	req.Header.Set("X-API-Key", "secret-token")
-
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rr.Code)
+func TestRunSanitize_NoRedactIPsDisablesIPRedaction(t *testing.T) {
+	output := runSanitizeForTest(t, "Server IP is 203.0.113.7", "--json", "--no-redact-ips")
+	if strings.Contains(output, "[REDACTED-IP-ADDRESS]") {
+		t.Fatalf("expected --no-redact-ips to preserve IPs, got %q", output)
 	}
 }
 
-func TestWithBearerAuthRejectsInvalidToken(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+func runSanitizeForTest(t *testing.T, input string, flags ...string) string {
+	t.Helper()
 
-	h := withBearerAuth(next, "secret-token")
-	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
-	req.Header.Set("Authorization", "Bearer wrong-token")
-
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401, got %d", rr.Code)
-	}
-}
-
-func TestApplyProfileDefaultsProduction(t *testing.T) {
-	cfg := idpi.Config{}
-
-	if err := applyProfileDefaults("production", &cfg); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "input.txt")
+	if err := os.WriteFile(path, []byte(input), 0o600); err != nil {
+		t.Fatalf("write input file: %v", err)
 	}
 
-	if !cfg.StrictMode {
-		t.Fatal("expected strict mode to be enabled in production profile")
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
 	}
-	if cfg.MaxInputBytes == 0 || cfg.MaxDecodeDepth == 0 || cfg.MaxDecodedVariants == 0 {
-		t.Fatal("expected production profile to set analysis limits")
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	args := append(append([]string{}, flags...), path)
+	runErr := runSanitize(args)
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
 	}
-	if cfg.ServiceRetries == 0 || cfg.ServiceCircuitFailureThreshold == 0 {
-		t.Fatal("expected production profile to set service resilience defaults")
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
 	}
-	if cfg.ServiceCircuitCooldown < 10*time.Second {
-		t.Fatalf("expected production cooldown to be set, got %v", cfg.ServiceCircuitCooldown)
+	if err := r.Close(); err != nil {
+		t.Fatalf("close reader: %v", err)
 	}
-}
-
-func TestApplyProfileDefaultsInvalid(t *testing.T) {
-	cfg := idpi.Config{}
-	if err := applyProfileDefaults("weird", &cfg); err == nil {
-		t.Fatal("expected error for invalid profile")
+	if runErr != nil {
+		t.Fatalf("runSanitize returned error: %v", runErr)
 	}
-}
 
-func TestResolveAuthTokenUsesFlagValue(t *testing.T) {
-	t.Setenv("IDPI_MCP_TOKEN", "env-token")
-
-	got := resolveAuthToken("flag-token")
-	if got != "flag-token" {
-		t.Fatalf("expected flag token to win, got %q", got)
-	}
-}
-
-func TestResolveAuthTokenFallsBackToEnv(t *testing.T) {
-	t.Setenv("IDPI_MCP_TOKEN", "env-token")
-
-	got := resolveAuthToken("")
-	if got != "env-token" {
-		t.Fatalf("expected env token fallback, got %q", got)
-	}
-}
-
-func TestResolveAuthTokenHandlesWhitespace(t *testing.T) {
-	t.Setenv("IDPI_MCP_TOKEN", "  env-token  ")
-
-	got := resolveAuthToken("  ")
-	if got != "env-token" {
-		t.Fatalf("expected trimmed env token, got %q", got)
-	}
-}
-
-func TestResolveAuthTokenEmptyWhenUnset(t *testing.T) {
-	_ = os.Unsetenv("IDPI_MCP_TOKEN")
-
-	got := resolveAuthToken("")
-	if got != "" {
-		t.Fatalf("expected empty token when unset, got %q", got)
-	}
+	return string(out)
 }

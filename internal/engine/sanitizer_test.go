@@ -243,6 +243,56 @@ func TestSanitize_IPAddressRedactedByDefault(t *testing.T) {
 	}
 }
 
+func TestSanitize_NameNotRedactedByDefault(t *testing.T) {
+	input := "Customer: Alice Smith, email alice@example.com"
+	cleanText, _, err := sanitize(input, defaultSanitizeConfig())
+	if err != nil {
+		t.Fatalf("sanitize failed: %v", err)
+	}
+	if strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected names to stay unredacted by default, got %q", cleanText)
+	}
+}
+
+func TestSanitize_NameRedactedWithExplicitFlagAndLabel(t *testing.T) {
+	cfg := defaultSanitizeConfig()
+	cfg.RedactNames = true
+	input := "Customer: Alice Smith"
+	cleanText, _, err := sanitize(input, cfg)
+	if err != nil {
+		t.Fatalf("sanitize failed: %v", err)
+	}
+	if !strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected labeled name redaction, got %q", cleanText)
+	}
+}
+
+func TestSanitize_NameRedactedWithExplicitFlagAndNearbyPII(t *testing.T) {
+	cfg := defaultSanitizeConfig()
+	cfg.RedactNames = true
+	input := "Alice Smith, email alice@example.com"
+	cleanText, _, err := sanitize(input, cfg)
+	if err != nil {
+		t.Fatalf("sanitize failed: %v", err)
+	}
+	if !strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected name redaction near stronger PII, got %q", cleanText)
+	}
+}
+
+func TestSanitize_NamePlaceholderSkippedEvenWhenEnabled(t *testing.T) {
+	cfg := defaultSanitizeConfig()
+	cfg.RedactNames = true
+	input := "Patient: John Doe, email john@example.com"
+	cleanText, _, err := sanitize(input, cfg)
+	if err != nil {
+		t.Fatalf("sanitize failed: %v", err)
+	}
+	if strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected placeholder name to be preserved, got %q", cleanText)
+	}
+}
+
 func TestSanitizeOutput_PhoneWithoutContextRedacted(t *testing.T) {
 	cleanText, _, err := sanitize("The number 555-123-4567 appears here", defaultOutputSanitizeConfig())
 	if err != nil {
@@ -250,6 +300,17 @@ func TestSanitizeOutput_PhoneWithoutContextRedacted(t *testing.T) {
 	}
 	if !strings.Contains(cleanText, "[REDACTED-PHONE]") {
 		t.Fatalf("expected phone redaction in output mode, got %q", cleanText)
+	}
+}
+
+func TestSanitizeOutput_NameNotRedactedByDefault(t *testing.T) {
+	input := "Employee: Alice Smith, email alice@example.com"
+	cleanText, _, err := sanitize(input, defaultOutputSanitizeConfig())
+	if err != nil {
+		t.Fatalf("sanitize output failed: %v", err)
+	}
+	if strings.Contains(cleanText, "[REDACTED-NAME]") {
+		t.Fatalf("expected names to stay unredacted by default in output mode, got %q", cleanText)
 	}
 }
 

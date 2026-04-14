@@ -33,6 +33,7 @@ type SanitizeConfig struct {
 	RedactCreditCards bool
 	RedactAPIKeys     bool
 	RedactIPAddresses bool
+	RedactNames       bool
 	RedactURLs        bool
 	CustomPatterns    []string
 	ReplacementFormat string
@@ -47,6 +48,7 @@ func toInternalSanitizeConfig(cfg SanitizeConfig) sanitizeConfig {
 	internalCfg.RedactCreditCards = cfg.RedactCreditCards
 	internalCfg.RedactAPIKeys = cfg.RedactAPIKeys
 	internalCfg.RedactIPAddresses = cfg.RedactIPAddresses
+	internalCfg.RedactNames = cfg.RedactNames
 	internalCfg.RedactURLs = cfg.RedactURLs
 	internalCfg.CustomPatterns = cfg.CustomPatterns
 	internalCfg.ReplacementFormat = cfg.ReplacementFormat
@@ -61,7 +63,6 @@ func toOutputSanitizeConfig(cfg SanitizeConfig) sanitizeConfig {
 	internalCfg.RedactURLs = true
 	internalCfg.RequirePhoneContext = false
 	internalCfg.RequireSSNContext = false
-	internalCfg.EnableNamePatterns = true
 	return internalCfg
 }
 

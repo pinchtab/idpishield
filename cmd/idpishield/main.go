@@ -455,15 +455,19 @@ func runSanitize(args []string) error {
 	fs := flag.NewFlagSet("sanitize", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
-	redactEmails := fs.Bool("redact-emails", true, "enable email redaction")
-	redactPhones := fs.Bool("redact-phones", true, "enable phone redaction")
-	redactSSNs := fs.Bool("redact-ssns", true, "enable SSN redaction")
-	redactCreditCards := fs.Bool("redact-credit-cards", true, "enable credit card redaction")
-	redactAPIKeys := fs.Bool("redact-api-keys", true, "enable API key redaction")
-	redactIPs := fs.Bool("redact-ips", false, "enable IP redaction")
-	redactURLs := fs.Bool("redact-urls", false, "enable URL redaction")
+	defaults := idpi.DefaultSanitizeConfig()
+
+	redactEmails := fs.Bool("redact-emails", defaults.RedactEmails, "enable email redaction")
+	redactPhones := fs.Bool("redact-phones", defaults.RedactPhones, "enable phone redaction")
+	redactSSNs := fs.Bool("redact-ssns", defaults.RedactSSNs, "enable SSN redaction")
+	redactCreditCards := fs.Bool("redact-credit-cards", defaults.RedactCreditCards, "enable credit card redaction")
+	redactAPIKeys := fs.Bool("redact-api-keys", defaults.RedactAPIKeys, "enable API key redaction")
+	redactIPs := fs.Bool("redact-ips", defaults.RedactIPAddresses, "enable IP redaction")
+	noRedactIPs := fs.Bool("no-redact-ips", false, "disable IP redaction")
+	redactNames := fs.Bool("redact-names", defaults.RedactNames, "enable name redaction")
+	redactURLs := fs.Bool("redact-urls", defaults.RedactURLs, "enable URL redaction")
 	noRetainOriginal := fs.Bool("no-retain-original", false, "do not retain original redacted values")
-	replacementFormat := fs.String("format", "[REDACTED-%s]", "replacement format")
+	replacementFormat := fs.String("format", defaults.ReplacementFormat, "replacement format")
 	outputMode := fs.Bool("output-mode", false, "use output-focused sanitize mode")
 	jsonOutput := fs.Bool("json", false, "emit JSON output")
 
@@ -489,7 +493,8 @@ func runSanitize(args []string) error {
 		RedactSSNs:        *redactSSNs,
 		RedactCreditCards: *redactCreditCards,
 		RedactAPIKeys:     *redactAPIKeys,
-		RedactIPAddresses: *redactIPs,
+		RedactIPAddresses: *redactIPs && !*noRedactIPs,
+		RedactNames:       *redactNames,
 		RedactURLs:        *redactURLs,
 		ReplacementFormat: *replacementFormat,
 	}
@@ -704,7 +709,9 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --redact-ssns          enable SSN redaction (default: true)")
 	fmt.Fprintln(w, "  --redact-credit-cards  enable credit card redaction (default: true)")
 	fmt.Fprintln(w, "  --redact-api-keys      enable API key redaction (default: true)")
-	fmt.Fprintln(w, "  --redact-ips           enable IP redaction (default: false)")
+	fmt.Fprintln(w, "  --redact-ips           enable IP redaction (default: true)")
+	fmt.Fprintln(w, "  --no-redact-ips        disable IP redaction")
+	fmt.Fprintln(w, "  --redact-names         enable name redaction (default: false)")
 	fmt.Fprintln(w, "  --redact-urls          enable URL redaction (default: false)")
 	fmt.Fprintln(w, "  --no-retain-original   avoid retaining original redacted values")
 	fmt.Fprintln(w, "  --format               replacement format (default: [REDACTED-TYPE])")

@@ -231,6 +231,11 @@ type SanitizeConfig struct {
 	// RedactIPAddresses removes IP addresses. Default: true
 	RedactIPAddresses bool
 
+	// RedactNames removes detected person-name pairs. Default: false.
+	// Name redaction is intentionally opt-in because names are prone to
+	// false positives in ordinary prose and documentation.
+	RedactNames bool
+
 	// RedactURLs removes or masks URLs. Default: false
 	// Disabled by default because URLs are common in legitimate text.
 	RedactURLs bool
@@ -247,7 +252,7 @@ type SanitizeConfig struct {
 
 // DefaultSanitizeConfig returns a SanitizeConfig with safe defaults.
 // Emails, phones, SSNs, credit cards, API keys, and IP addresses are redacted.
-// URLs are not redacted by default.
+// Name and URL redaction are not enabled by default.
 func DefaultSanitizeConfig() SanitizeConfig {
 	return SanitizeConfig{
 		RetainOriginal:    true,
@@ -257,6 +262,7 @@ func DefaultSanitizeConfig() SanitizeConfig {
 		RedactCreditCards: true,
 		RedactAPIKeys:     true,
 		RedactIPAddresses: true,
+		RedactNames:       false,
 		RedactURLs:        false,
 		ReplacementFormat: "[REDACTED-%s]",
 	}
@@ -509,6 +515,7 @@ func toEngineSanitizeConfig(cfg SanitizeConfig) engine.SanitizeConfig {
 		RedactCreditCards: cfg.RedactCreditCards,
 		RedactAPIKeys:     cfg.RedactAPIKeys,
 		RedactIPAddresses: cfg.RedactIPAddresses,
+		RedactNames:       cfg.RedactNames,
 		RedactURLs:        cfg.RedactURLs,
 		CustomPatterns:    cfg.CustomPatterns,
 		ReplacementFormat: cfg.ReplacementFormat,
