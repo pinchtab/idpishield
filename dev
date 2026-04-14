@@ -17,31 +17,33 @@ NC=$'\033[0m'
 # ── Commands ─────────────────────────────────────────────────────────
 COMMANDS=(
   "build:📦:Build binary"
-  "check:✅:All checks (format, vet, build, lint)"
+  "check:✅:Run all checks (fmt + vet + build + lint + test)"
   "test:🧪:Run tests"
+  "test verbose:🧪:Run tests (verbose)"
+  "test race:🧪:Run tests with race detector"
   "doctor:🩺:Setup dev environment"
   "fmt:✨:Format code"
   "vet:🔬:Run go vet"
   "lint:🔍:Run golangci-lint"
   "coverage:📊:Run tests with coverage"
   "benchmark:🏋:Run benchmarks"
+  "benchmark optimize:🏋:Run benchmark optimization loop setup"
 )
 
 show_help() {
   echo ""
-  echo "  ${ACCENT}${BOLD}🛡️  idpishield Dev${NC}"
+  echo "  ${BOLD}${ACCENT}idpishield${NC} ${MUTED}— development tool${NC}"
   echo ""
-  for cmd in "${COMMANDS[@]}"; do
-    IFS=':' read -r name emoji desc <<< "$cmd"
-    printf "  ${SUCCESS}%s${NC} ${BOLD}%-12s${NC} ${MUTED}%s${NC}\n" "$emoji" "$name" "$desc"
+  for entry in "${COMMANDS[@]}"; do
+    IFS=':' read -r cmd icon desc <<< "$entry"
+    printf "  ${ACCENT}%-22s${NC} %s %s\n" "./dev $cmd" "$icon" "$desc"
   done
-  echo ""
-  echo "  ${MUTED}Usage: ./dev [command]${NC}"
   echo ""
 }
 
 run_command() {
   local target="$1"
+  local subcommand="${2:-}"
 
   echo ""
 
@@ -56,7 +58,21 @@ run_command() {
       exec bash scripts/check.sh
       ;;
     "test")
-      exec bash scripts/test.sh
+      case "$subcommand" in
+        verbose)
+          echo "  ${ACCENT}${BOLD}🧪 Running tests (verbose)${NC}"
+          echo ""
+          go test ./... -count=1 -v
+          ;;
+        race)
+          echo "  ${ACCENT}${BOLD}🧪 Running tests with race detector${NC}"
+          echo ""
+          go test ./... -count=1 -race
+          ;;
+        *)
+          exec bash scripts/test.sh
+          ;;
+      esac
       ;;
     "doctor")
       exec bash scripts/doctor.sh
@@ -88,9 +104,14 @@ run_command() {
       echo "  ${MUTED}HTML report: go tool cover -html=coverage.out${NC}"
       ;;
     "benchmark")
-      echo "  ${ACCENT}${BOLD}🏋 Running benchmarks${NC}"
-      echo ""
-      go test ./benchmark/ -count=1 -v
+      case "$subcommand" in
+        optimize)
+          exec bash tests/benchmark/scripts/run-optimization.sh
+          ;;
+        *)
+          exec bash tests/benchmark/scripts/run-benchmark.sh
+          ;;
+      esac
       ;;
     *)
       echo "  ${ERROR}Unknown command: $target${NC}"
@@ -105,7 +126,7 @@ run_command() {
 if [ $# -gt 0 ]; then
   case "$1" in
     -h|--help|help) show_help; exit 0 ;;
-    *) run_command "$1" ;;
+    *) run_command "$1" "${2:-}" ;;
   esac
   exit 0
 fi

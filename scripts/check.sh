@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# check.sh — Local pre-push checks matching GitHub Actions CI
-# Runs: format → vet → build → lint
+# check.sh — Local pre-push checks
+# Runs: format → vet → build → lint → test
 
 cd "$(dirname "$0")/.."
 
@@ -93,6 +93,16 @@ else
   echo -e "  ${ACCENT}·${NC} golangci-lint not installed — skipping"
   hint "Install: brew install golangci-lint"
 fi
+
+# ── Tests ────────────────────────────────────────────────────────────
+
+section "Tests"
+
+if ! bash scripts/test.sh; then
+  fail "tests"
+  exit 1
+fi
+ok "tests"
 
 # ── Summary ──────────────────────────────────────────────────────────
 

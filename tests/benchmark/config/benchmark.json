@@ -1,0 +1,6 @@
+{
+  "dataset": "../../benchmark/dataset",
+  "output": "./results",
+  "strict": true,
+  "json_only": false
+}

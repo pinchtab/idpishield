@@ -1,0 +1,7 @@
+benchmark_*.json
+benchmark_*.txt
+latest.json
+best_score.json
+next_focus.md
+optimization_log.md
+!.gitkeep
