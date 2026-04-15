@@ -100,6 +100,10 @@ func traverseDOM(node *html.Node, state *htmlExtractionState, inheritedHidden bo
 		if isIgnoredElement(name) {
 			isIgnored = true
 		}
+		// Handle script tags specially - ignore JavaScript but extract JSON-LD
+		if name == "script" && !isJSONLD(node) {
+			isIgnored = true
+		}
 
 		if !isIgnored {
 			if elementIsHidden(node) {
@@ -142,11 +146,25 @@ func traverseDOM(node *html.Node, state *htmlExtractionState, inheritedHidden bo
 
 func isIgnoredElement(name string) bool {
 	switch name {
-	case "script", "style", "noscript", "template":
+	case "style", "noscript", "template":
 		return true
 	default:
 		return false
 	}
+}
+
+// isJSONLD checks if a script element contains JSON-LD structured data
+func isJSONLD(node *html.Node) bool {
+	if node == nil || node.Type != html.ElementNode || strings.ToLower(node.Data) != "script" {
+		return false
+	}
+	for _, attr := range node.Attr {
+		if strings.ToLower(attr.Key) == "type" {
+			typeVal := strings.ToLower(strings.TrimSpace(attr.Val))
+			return typeVal == "application/ld+json"
+		}
+	}
+	return false
 }
 
 func extractElementAttrs(node *html.Node, state *htmlExtractionState) {

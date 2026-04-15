@@ -9,3 +9,4 @@ cover.out
 .DS_Store
 Thumbs.db
 benchmark/reports/
+.gocache/

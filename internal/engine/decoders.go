@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 )
@@ -68,10 +69,18 @@ func (da *decodeAggregator) tryDecode(text string, depth int) {
 		da.tryDecode(decoded, depth+1)
 	}
 
-	// Try HEX decode
+	// Try HEX decode (whole text or extracted segments)
 	if decoded := tryHexDecode(text); decoded != "" && decoded != text {
 		da.recordResult(decoded, "hex", depth)
 		da.tryDecode(decoded, depth+1)
+	}
+
+	// Try extracting and decoding hex segments from within the text
+	hexSegments := extractAndDecodeHexSegments(text)
+	for _, decoded := range hexSegments {
+		if decoded != "" && decoded != text {
+			da.recordResult(decoded, "hex-segment", depth)
+		}
 	}
 
 	// Try ROT cipher family (ROT13 to ROT25)
@@ -166,14 +175,49 @@ func tryBase64URLDecode(s string) string {
 	return ""
 }
 
-// tryHexDecode attempts HEX decoding.
+// tryHexDecode attempts HEX decoding, handling both compact and space-separated formats.
 func tryHexDecode(s string) string {
-	// HEX strings are typically all hex chars with no spaces
-	if !isHexString(s) {
+	// Try compact hex first (no spaces)
+	if isHexString(s) {
+		data, err := hex.DecodeString(s)
+		if err == nil {
+			decoded := string(data)
+			if isValidDecodedText(decoded) {
+				return decoded
+			}
+		}
+	}
+
+	// Try space-separated hex bytes (e.g., "49 67 6E 6F 72 65")
+	if decoded := trySpaceSeparatedHex(s); decoded != "" {
+		return decoded
+	}
+
+	return ""
+}
+
+// trySpaceSeparatedHex decodes hex strings with spaces between bytes.
+func trySpaceSeparatedHex(s string) string {
+	// Quick check: must contain spaces and look like hex bytes
+	if !strings.Contains(s, " ") {
 		return ""
 	}
 
-	data, err := hex.DecodeString(s)
+	parts := strings.Fields(s)
+	if len(parts) < 4 {
+		return "" // Too short to be meaningful
+	}
+
+	// Verify all parts are valid 2-char hex bytes
+	hexStr := ""
+	for _, part := range parts {
+		if len(part) != 2 || !isHexString(part) {
+			return ""
+		}
+		hexStr += part
+	}
+
+	data, err := hex.DecodeString(hexStr)
 	if err != nil {
 		return ""
 	}
@@ -183,6 +227,47 @@ func tryHexDecode(s string) string {
 		return decoded
 	}
 	return ""
+}
+
+// extractAndDecodeHexSegments finds hex-like segments in text and tries to decode them.
+// Handles space-separated hex bytes that may be embedded within other text.
+func extractAndDecodeHexSegments(text string) []string {
+	var results []string
+
+	// First try line-by-line (for raw text before normalization)
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) < 8 {
+			continue
+		}
+		if decoded := trySpaceSeparatedHex(line); decoded != "" {
+			results = append(results, decoded)
+		}
+	}
+
+	// Also search for embedded hex sequences (for normalized text where newlines are collapsed)
+	// Look for runs of space-separated 2-char hex bytes
+	if decoded := findAndDecodeEmbeddedHex(text); decoded != "" {
+		results = append(results, decoded)
+	}
+
+	return results
+}
+
+// hexBytePattern matches a single space-separated hex byte (2 hex digits).
+var hexBytePattern = regexp.MustCompile(`\b([0-9A-Fa-f]{2})((?:\s+[0-9A-Fa-f]{2}){3,})\b`)
+
+// findAndDecodeEmbeddedHex searches for embedded hex byte sequences in text.
+// Looks for patterns like "49 67 6E 6F" with at least 4 bytes.
+func findAndDecodeEmbeddedHex(text string) string {
+	match := hexBytePattern.FindString(text)
+	if match == "" {
+		return ""
+	}
+
+	// Try to decode the matched hex sequence
+	return trySpaceSeparatedHex(match)
 }
 
 // tryRotCipher applies ROT-N cipher decryption.

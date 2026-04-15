@@ -113,6 +113,7 @@ func (n *normalizer) NormalizeWithSignals(text string) (string, normalizationSig
 
 	out := strings.TrimSpace(buf.String())
 	out = collapseSpaces(out)
+	out = normalizeLeetspeakWords(out)
 	out = normalizeSplitKeywords(out)
 	return out, signals
 }
@@ -207,6 +208,9 @@ var splitKeywordPatterns = []splitKeywordPattern{
 	newSplitKeywordPattern("exfiltrate"),
 	newSplitKeywordPattern("developer"),
 	newSplitKeywordPattern("instructions"),
+	newSplitKeywordPattern("system"),
+	newSplitKeywordPattern("prompt"),
+	newSplitKeywordPattern("reveal"),
 }
 
 func newSplitKeywordPattern(keyword string) splitKeywordPattern {
@@ -233,6 +237,58 @@ func normalizeSplitKeywords(s string) string {
 		out = p.rx.ReplaceAllString(out, p.replacement)
 	}
 	return out
+}
+
+// leetspeakNormMap maps common leetspeak digit substitutions to lowercase letters.
+var leetspeakNormMap = map[rune]rune{
+	'0': 'o',
+	'1': 'i',
+	'3': 'e',
+	'4': 'a',
+	'5': 's',
+	'7': 't',
+	'@': 'a',
+	'$': 's',
+}
+
+// leetspeakWordPattern matches words that may contain leetspeak (letters mixed with digits/@/$).
+// Minimum 2 chars to catch short words like "m3" (me) and "1s" (is).
+var leetspeakWordPattern = regexp.MustCompile(`(?i)\b[a-z0-9@$]{2,}\b`)
+
+// normalizeLeetspeakWords converts leetspeak digits to letters within candidate words.
+// Only transforms words containing both letters and leetspeak-convertible characters.
+// Preserves case of existing letters.
+func normalizeLeetspeakWords(s string) string {
+	return leetspeakWordPattern.ReplaceAllStringFunc(s, func(word string) string {
+		hasLetter := false
+		hasLeetspeakChar := false
+
+		for _, r := range word {
+			lower := unicode.ToLower(r)
+			if lower >= 'a' && lower <= 'z' {
+				hasLetter = true
+			}
+			if _, ok := leetspeakNormMap[r]; ok {
+				hasLeetspeakChar = true
+			}
+		}
+
+		// Only transform words mixing letters with leetspeak chars
+		if !hasLetter || !hasLeetspeakChar {
+			return word
+		}
+
+		var buf strings.Builder
+		buf.Grow(len(word))
+		for _, r := range word {
+			if mapped, ok := leetspeakNormMap[r]; ok {
+				buf.WriteRune(mapped)
+			} else {
+				buf.WriteRune(r)
+			}
+		}
+		return buf.String()
+	})
 }
 
 // isInvisible returns true for zero-width and invisible Unicode characters
