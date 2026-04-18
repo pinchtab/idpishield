@@ -48,7 +48,7 @@ const (
 )
 
 // assessOutput runs output-side scanners and assembles a RiskResult for LLM responses.
-func assessOutput(text, originalPrompt string, cfg Config) RiskResult {
+func assessOutput(text, originalPrompt string, cfg Config, customScanners ...LayeredScanner) RiskResult {
 	trimmed := strings.TrimSpace(text)
 	base := SafeResult()
 	base.IsOutputScan = true
@@ -71,13 +71,51 @@ func assessOutput(text, originalPrompt string, cfg Config) RiskResult {
 	score += outputCodeScore(code)
 	score += outputRelevanceScore(relevance)
 	score += outputCombinationBonus(leak, urlResult, pii, code)
-	if score > outputScoreMax {
-		score = outputScoreMax
-	}
 
 	patterns := outputPatterns(leak, urlResult, pii, code, relevance)
 	categories := outputCategories(leak, urlResult, pii, code, relevance)
+	var layers []LayerResult
+
 	reason := outputReason(leak, urlResult, pii, code, relevance)
+
+	if len(customScanners) > 0 {
+		layers = make([]LayerResult, 0, 1+len(scannerLayerExecutionOrder))
+		heuristics := LayerResult{
+			Layer:       ScannerLayerHeuristics,
+			Score:       score,
+			ScannersRun: 1,
+			Matched:     score > 0,
+			Categories:  append([]string(nil), categories...),
+			Patterns:    append([]string(nil), patterns...),
+		}
+		if !isEmptyLayerResult(heuristics) {
+			layers = append(layers, heuristics)
+		}
+
+		fullPipeline := cfg.Mode == ModeStrict
+		customCtx := internalScanContext{
+			Text:         trimmed,
+			RawText:      text,
+			URL:          "",
+			Mode:         cfg.Mode,
+			IsOutputScan: true,
+			CurrentScore: score,
+		}
+		customResult, layerResults := runLayeredScanners(customScanners, customCtx, fullPipeline)
+		layers = append(layers, layerResults...)
+		if customResult.Matched {
+			score += customResult.TotalScore
+			patterns = mergeUniqueStrings(patterns, customResult.PatternIDs)
+			categories = mergeUniqueStrings(categories, customResult.Categories)
+			for _, customReason := range customResult.Reasons {
+				reason = appendReason(reason, customReason)
+			}
+		}
+	}
+
+	if score > outputScoreMax {
+		score = outputScoreMax
+	}
 	if reason == "" {
 		reason = "No threats detected"
 	}
@@ -99,6 +137,7 @@ func assessOutput(text, originalPrompt string, cfg Config) RiskResult {
 		CodeDetected:        code.HasCode,
 		HarmfulCodePatterns: code.HarmfulPatterns,
 		Intent:              deriveOutputIntent(leak, pii, urlResult, code, relevance),
+		Layers:              layers,
 	}
 
 	if !result.PIIFound {

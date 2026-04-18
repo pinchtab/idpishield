@@ -19,6 +19,9 @@ const (
 
 	// ModeDeep includes balanced analysis plus optional service escalation.
 	ModeDeep Mode = "deep"
+
+	// ModeStrict runs the full guardrail pipeline without early-exit optimization.
+	ModeStrict Mode = "strict"
 )
 
 // String returns the string representation of Mode.
@@ -39,6 +42,8 @@ func ParseMode(s string) Mode {
 		return ModeBalanced
 	case "deep":
 		return ModeDeep
+	case "strict":
+		return ModeStrict
 	default:
 		return ModeBalanced
 	}
@@ -59,9 +64,62 @@ func ParseModeStrict(s string) (Mode, error) {
 		return ModeBalanced, nil
 	case "deep":
 		return ModeDeep, nil
+	case "strict":
+		return ModeStrict, nil
 	default:
-		return "", fmt.Errorf("invalid mode %q: expected fast, balanced, or deep", s)
+		return "", fmt.Errorf("invalid mode %q: expected fast, balanced, deep, or strict", s)
 	}
+}
+
+// ScannerLayer identifies the pipeline layer that produced scanner output.
+type ScannerLayer string
+
+const (
+	ScannerLayerHeuristics ScannerLayer = "heuristics"
+	ScannerLayerCustom     ScannerLayer = "custom"
+	ScannerLayerVector     ScannerLayer = "vector"
+	ScannerLayerLLM        ScannerLayer = "llm"
+	ScannerLayerCanary     ScannerLayer = "canary"
+)
+
+// LayerResult contains per-layer scoring details.
+type LayerResult struct {
+	Layer       ScannerLayer `json:"layer"`
+	Score       int          `json:"score"`
+	ScannersRun int          `json:"scanners_run"`
+	Matched     bool         `json:"matched"`
+	EarlyExit   bool         `json:"early_exit,omitempty"`
+	Categories  []string     `json:"categories,omitempty"`
+	Patterns    []string     `json:"patterns,omitempty"`
+	Reasons     []string     `json:"reasons,omitempty"`
+}
+
+// JudgeVerdictResult contains the LLM judge's assessment.
+type JudgeVerdictResult struct {
+	// IsAttack is true if the LLM judged the input as an attack.
+	IsAttack bool `json:"is_attack"`
+
+	// Confidence is the LLM's confidence level.
+	// Values: "high", "medium", "low"
+	Confidence string `json:"confidence"`
+
+	// Reasoning is the LLM's explanation of its verdict.
+	// Only populated when JudgeConfig.IncludeReasoningInResult is true.
+	Reasoning string `json:"reasoning,omitempty"`
+
+	// Provider identifies which LLM provider was used.
+	Provider string `json:"provider"`
+
+	// Model identifies which model was used.
+	Model string `json:"model"`
+
+	// LatencyMs is how long the LLM call took in milliseconds.
+	LatencyMs int64 `json:"latency_ms"`
+
+	// ScoreAdjustment is how much the score was changed based on verdict.
+	// Positive = score increased (attack confirmed).
+	// Negative = score decreased (benign confirmed).
+	ScoreAdjustment int `json:"score_adjustment"`
 }
 
 // Intent classifies the attacker's goal based on detected patterns.
@@ -140,6 +198,13 @@ type RiskResult struct {
 
 	// Intent classifies the primary attacker goal. Empty when no threat is detected.
 	Intent Intent `json:"intent,omitempty"`
+
+	// Layers contains per-layer pipeline output for audit/debug visibility.
+	Layers []LayerResult `json:"layers,omitempty"`
+
+	// JudgeVerdict contains the LLM judge's assessment, if enabled.
+	// Nil when LLM judgment was not performed.
+	JudgeVerdict *JudgeVerdictResult `json:"judge_verdict,omitempty"`
 }
 
 // ScoreToLevel maps a 0–100 score to its corresponding severity level.
@@ -189,5 +254,7 @@ func SafeResult() RiskResult {
 		RelevanceScore:      -1.0,
 		CodeDetected:        false,
 		HarmfulCodePatterns: []string{},
+		Layers:              []LayerResult{},
+		JudgeVerdict:        nil,
 	}
 }

@@ -1,7 +1,8 @@
 {
   "main": [
     "get-started.md",
-    "mcp.md"
+    "mcp.md",
+    "llm-judge.md"
   ],
   "architecture": [
     "architecture/design.md"

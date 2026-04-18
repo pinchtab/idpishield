@@ -26,25 +26,27 @@ type overDefenseCase struct {
 }
 
 type scanOutput struct {
-	Score               int               `json:"score"`
-	Level               string            `json:"level"`
-	Blocked             bool              `json:"blocked"`
-	Reason              string            `json:"reason"`
-	Patterns            []string          `json:"patterns"`
-	Categories          []string          `json:"categories"`
-	BanListMatches      []string          `json:"ban_list_matches"`
-	OverDefenseRisk     float64           `json:"over_defense_risk"`
-	IsOutputScan        bool              `json:"is_output_scan"`
-	PIIFound            bool              `json:"pii_found"`
-	PIITypes            []string          `json:"pii_types"`
-	RedactedText        string            `json:"redacted_text"`
-	RelevanceScore      float64           `json:"relevance_score"`
-	CodeDetected        bool              `json:"code_detected"`
-	HarmfulCodePatterns []string          `json:"harmful_code_patterns"`
-	Intent              idpi.Intent       `json:"intent,omitempty"`
-	CleanText           string            `json:"clean_text,omitempty"`
-	RedactionCount      int               `json:"redaction_count,omitempty"`
-	Redactions          []redactionOutput `json:"redactions,omitempty"`
+	Score               int                      `json:"score"`
+	Level               string                   `json:"level"`
+	Blocked             bool                     `json:"blocked"`
+	Reason              string                   `json:"reason"`
+	Patterns            []string                 `json:"patterns"`
+	Categories          []string                 `json:"categories"`
+	BanListMatches      []string                 `json:"ban_list_matches"`
+	OverDefenseRisk     float64                  `json:"over_defense_risk"`
+	IsOutputScan        bool                     `json:"is_output_scan"`
+	PIIFound            bool                     `json:"pii_found"`
+	PIITypes            []string                 `json:"pii_types"`
+	RedactedText        string                   `json:"redacted_text"`
+	RelevanceScore      float64                  `json:"relevance_score"`
+	CodeDetected        bool                     `json:"code_detected"`
+	HarmfulCodePatterns []string                 `json:"harmful_code_patterns"`
+	Intent              idpi.Intent              `json:"intent,omitempty"`
+	Layers              []idpi.LayerResult       `json:"layers,omitempty"`
+	JudgeVerdict        *idpi.JudgeVerdictResult `json:"judge_verdict"`
+	CleanText           string                   `json:"clean_text,omitempty"`
+	RedactionCount      int                      `json:"redaction_count,omitempty"`
+	Redactions          []redactionOutput        `json:"redactions,omitempty"`
 }
 
 type redactionOutput struct {
@@ -252,7 +254,7 @@ func runMCPServe(args []string) error {
 	}
 
 	shields := make(map[idpi.Mode]*idpi.Shield, 3)
-	for _, mode := range []idpi.Mode{idpi.ModeFast, idpi.ModeBalanced, idpi.ModeDeep} {
+	for _, mode := range []idpi.Mode{idpi.ModeFast, idpi.ModeBalanced, idpi.ModeDeep, idpi.ModeStrict} {
 		shield, initErr := idpi.New(cfgForMode(baseCfg, mode))
 		if initErr != nil {
 			return initErr
@@ -274,8 +276,8 @@ func runMCPServe(args []string) error {
 			mcp.Description("Text content to assess for IDPI risks."),
 		),
 		mcp.WithString("mode",
-			mcp.Description("Optional analysis mode override: fast, balanced, or deep."),
-			mcp.Enum("fast", "balanced", "deep"),
+			mcp.Description("Optional analysis mode override: fast, balanced, deep, or strict."),
+			mcp.Enum("fast", "balanced", "deep", "strict"),
 		),
 	)
 
@@ -328,7 +330,7 @@ func runScan(args []string) error {
 	fs.SetOutput(io.Discard)
 
 	profile := fs.String("profile", "default", "runtime profile: default|production")
-	mode := fs.String("mode", "balanced", "analysis mode: fast|balanced|deep")
+	mode := fs.String("mode", "balanced", "analysis mode: fast|balanced|deep|strict")
 	domains := fs.String("domains", "", "comma-separated allowlist domains")
 	url := fs.String("url", "", "source URL for domain checks")
 	strict := fs.Bool("strict", false, "enable strict mode (block >= 40)")
@@ -349,6 +351,12 @@ func runScan(args []string) error {
 	allowOutputCode := fs.Bool("allow-output-code", false, "allow code in output and only flag harmful code")
 	banOutputCode := fs.Bool("ban-output-code", false, "treat any code in output as suspicious")
 	sanitize := fs.Bool("sanitize", false, "run sanitization in addition to scoring")
+	judgeProvider := fs.String("judge-provider", "", "LLM provider: ollama, openai, anthropic, custom")
+	judgeModel := fs.String("judge-model", "", "model name (uses provider default if not set)")
+	judgeAPIKey := fs.String("judge-api-key", "", "API key (also reads from env vars)")
+	judgeBaseURL := fs.String("judge-base-url", "", "custom API base URL")
+	judgeThreshold := fs.Int("judge-threshold", 25, "min score to trigger judge")
+	judgeTimeout := fs.Int("judge-timeout", 10, "judge timeout in seconds")
 
 	if err := fs.Parse(args); err != nil {
 		printUsage(os.Stderr)
@@ -383,6 +391,18 @@ func runScan(args []string) error {
 		ConfigFile:                     strings.TrimSpace(*configFile),
 		AllowOutputCode:                *allowOutputCode,
 		BanOutputCode:                  *banOutputCode,
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(*judgeProvider))
+	if provider != "" {
+		shieldConfig.Judge = &idpi.JudgeConfig{
+			Provider:       idpi.JudgeProvider(provider),
+			Model:          strings.TrimSpace(*judgeModel),
+			APIKey:         strings.TrimSpace(*judgeAPIKey),
+			BaseURL:        strings.TrimSpace(*judgeBaseURL),
+			ScoreThreshold: *judgeThreshold,
+			TimeoutSeconds: *judgeTimeout,
+		}
 	}
 	if err := applyProfileDefaults(*profile, &shieldConfig); err != nil {
 		return err
@@ -433,6 +453,8 @@ func runScan(args []string) error {
 		CodeDetected:        result.CodeDetected,
 		HarmfulCodePatterns: result.HarmfulCodePatterns,
 		Intent:              result.Intent,
+		Layers:              result.Layers,
+		JudgeVerdict:        result.JudgeVerdict,
 		CleanText:           cleanText,
 		RedactionCount:      len(redactions),
 		Redactions:          toRedactionOutput(redactions),
@@ -587,6 +609,8 @@ func runScanOutput(args []string) error {
 		CodeDetected:        result.CodeDetected,
 		HarmfulCodePatterns: result.HarmfulCodePatterns,
 		Intent:              result.Intent,
+		Layers:              result.Layers,
+		JudgeVerdict:        result.JudgeVerdict,
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -681,7 +705,7 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "scan flags:")
 	fmt.Fprintln(w, "  --profile   default|production (default: default)")
-	fmt.Fprintln(w, "  --mode      fast|balanced|deep (default: balanced)")
+	fmt.Fprintln(w, "  --mode      fast|balanced|deep|strict (default: balanced)")
 	fmt.Fprintln(w, "  --domains   comma-separated allowed domains")
 	fmt.Fprintln(w, "  --url       source URL for domain allowlist checks")
 	fmt.Fprintln(w, "  --strict    block at score >= 40 instead of >= 60")
@@ -702,6 +726,12 @@ func printUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --allow-output-code     allow code in output and only flag harmful code")
 	fmt.Fprintln(w, "  --ban-output-code       treat any code in output as suspicious")
 	fmt.Fprintln(w, "  --sanitize              run sanitization in addition to risk scoring")
+	fmt.Fprintln(w, "  --judge-provider        LLM provider: ollama|openai|anthropic|custom")
+	fmt.Fprintln(w, "  --judge-model           model name (provider default when empty)")
+	fmt.Fprintln(w, "  --judge-api-key         API key (also read from environment)")
+	fmt.Fprintln(w, "  --judge-base-url        custom API base URL")
+	fmt.Fprintln(w, "  --judge-threshold       min score to trigger judge (default: 25)")
+	fmt.Fprintln(w, "  --judge-timeout         judge HTTP timeout in seconds (default: 10)")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "sanitize flags:")
 	fmt.Fprintln(w, "  --redact-emails        enable email redaction (default: true)")
@@ -734,7 +764,7 @@ func printMCPUsage(w io.Writer) {
 	fmt.Fprintln(w, "  idpishield mcp serve --transport http --host 127.0.0.1 --port 8081 --endpoint /mcp")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Exposed tool:")
-	fmt.Fprintln(w, "  idpi_assess(text: string, mode?: fast|balanced|deep)")
+	fmt.Fprintln(w, "  idpi_assess(text: string, mode?: fast|balanced|deep|strict)")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "mcp serve flags:")
 	fmt.Fprintln(w, "  --profile     default|production (default: default)")
@@ -742,7 +772,7 @@ func printMCPUsage(w io.Writer) {
 	fmt.Fprintln(w, "  --host        host for HTTP transport (default: 127.0.0.1)")
 	fmt.Fprintln(w, "  --port        port for HTTP transport (default: 8081)")
 	fmt.Fprintln(w, "  --endpoint    endpoint path for HTTP transport (default: /mcp)")
-	fmt.Fprintln(w, "  --mode        default tool mode: fast|balanced|deep (default: balanced)")
+	fmt.Fprintln(w, "  --mode        default tool mode: fast|balanced|deep|strict (default: balanced)")
 	fmt.Fprintln(w, "  --domains     comma-separated allowed domains")
 	fmt.Fprintln(w, "  --strict      block at score >= 40 instead of >= 60")
 	fmt.Fprintln(w, "  --service-url optional deep-mode service URL")

@@ -22,7 +22,12 @@ package idpishield
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"strings"
+	"sync"
 	"time"
+	"unicode"
 
 	"github.com/pinchtab/idpishield/internal/engine"
 	"github.com/pinchtab/idpishield/internal/types"
@@ -42,11 +47,87 @@ const (
 
 	// ModeDeep includes balanced analysis plus optional service escalation.
 	ModeDeep = types.ModeDeep
+
+	// ModeStrict runs the full scanner pipeline without early exits.
+	ModeStrict = types.ModeStrict
 )
 
 // RiskResult is the canonical return type for all idpishield analysis operations.
 // Every client library and the service returns this exact structure.
 type RiskResult = types.RiskResult
+type JudgeVerdictResult = types.JudgeVerdictResult
+type ScannerLayer = types.ScannerLayer
+type LayerResult = types.LayerResult
+
+const (
+	ScannerLayerHeuristics = types.ScannerLayerHeuristics
+	ScannerLayerCustom     = types.ScannerLayerCustom
+	ScannerLayerVector     = types.ScannerLayerVector
+	ScannerLayerLLM        = types.ScannerLayerLLM
+	ScannerLayerCanary     = types.ScannerLayerCanary
+)
+
+// Scanner is the interface that custom scanners must implement.
+// Implement this interface to add domain-specific detection logic.
+type Scanner interface {
+	// Name returns a unique scanner identifier.
+	// Use lowercase hyphenated names (example: "medical-phi").
+	Name() string
+
+	// Scan evaluates context and returns detection details.
+	// Implementations must be concurrency-safe and avoid panics.
+	Scan(ctx ScanContext) ScanResult
+}
+
+// PriorityScanner is an optional scanner extension for execution ordering.
+// Higher values run earlier within the same layer.
+type PriorityScanner interface {
+	Priority() int
+}
+
+// ScanContext contains all information available to a custom scanner.
+type ScanContext struct {
+	// Text is normalized text after decoding/normalization.
+	Text string
+
+	// RawText is the original input text before normalization.
+	RawText string
+
+	// URL is the source URL when available.
+	URL string
+
+	// Mode is the current scan mode.
+	Mode Mode
+
+	// IsOutputScan reports whether this scan runs in AssessOutput.
+	IsOutputScan bool
+
+	// CurrentScore is built-in score accumulated so far.
+	CurrentScore int
+}
+
+// ScanResult is the return contract for custom scanners.
+type ScanResult struct {
+	// Score is this scanner's score contribution.
+	// Valid range is 0..100.
+	Score int
+
+	// Category is the scanner category label.
+	Category string
+
+	// Reason is a human-readable explanation.
+	Reason string
+
+	// Matched reports whether detection fired.
+	Matched bool
+
+	// PatternID is an optional audit identifier.
+	// If empty, the engine auto-generates one from Name().
+	PatternID string
+
+	// Metadata carries optional scanner-local debug data.
+	Metadata map[string]string
+}
 
 // Intent classifies the attacker's primary goal.
 type Intent = types.Intent
@@ -167,6 +248,218 @@ type Config struct {
 	// Supported formats: .json, .yaml, .yml
 	// Example: "/etc/idpishield/rules.yaml"
 	ConfigFile string
+
+	// ExtraScanners are custom scanners that run after all built-in
+	// input scanners during Assess/AssessContext.
+	ExtraScanners []Scanner
+
+	// ExtraOutputScanners are custom scanners that run after built-in
+	// output scanners during AssessOutput.
+	ExtraOutputScanners []Scanner
+
+	// MaxCustomScannerScore limits score contribution per custom scanner.
+	// Default is 50 when not set.
+	MaxCustomScannerScore int
+
+	// Judge configures the optional LLM-as-Judge layer.
+	// When nil or zero value, LLM judgment is disabled.
+	// The judge only runs when the heuristic score is within the
+	// configured threshold range — off by default.
+	Judge *JudgeConfig
+}
+
+// JudgeProvider identifies which LLM provider to use for judgment.
+type JudgeProvider string
+
+const (
+	// JudgeProviderOllama uses a local Ollama instance.
+	// Free, no API key required, runs offline.
+	// Install: https://ollama.ai
+	// Default model: llama3.2
+	JudgeProviderOllama JudgeProvider = "ollama"
+
+	// JudgeProviderOpenAI uses OpenAI's API.
+	// Requires OPENAI_API_KEY environment variable or APIKey field.
+	// Recommended model: gpt-4o-mini (cheap and fast)
+	JudgeProviderOpenAI JudgeProvider = "openai"
+
+	// JudgeProviderAnthropic uses Anthropic's API.
+	// Requires ANTHROPIC_API_KEY environment variable or APIKey field.
+	// Recommended model: claude-haiku-4-5 (cheapest Claude model)
+	JudgeProviderAnthropic JudgeProvider = "anthropic"
+
+	// JudgeProviderCustom uses a custom OpenAI-compatible API endpoint.
+	// Use this for LM Studio, llama.cpp server, vLLM, etc.
+	JudgeProviderCustom JudgeProvider = "custom"
+)
+
+// JudgeConfig configures the optional LLM-as-Judge layer.
+type JudgeConfig struct {
+	// Provider specifies which LLM provider to use.
+	Provider JudgeProvider
+
+	// Model is the model identifier to use.
+	// Defaults per provider:
+	//   ollama:    "llama3.2"
+	//   openai:    "gpt-4o-mini"
+	//   anthropic: "claude-haiku-4-5-20251001"
+	//   custom:    must be set explicitly
+	Model string
+
+	// APIKey is the API key for cloud providers.
+	// If empty, falls back to environment variables:
+	//   openai:    OPENAI_API_KEY
+	//   anthropic: ANTHROPIC_API_KEY
+	// Not used for Ollama or Custom providers.
+	APIKey string
+
+	// BaseURL is the API endpoint.
+	// Defaults per provider:
+	//   ollama:    "http://localhost:11434"
+	//   openai:    "https://api.openai.com/v1"
+	//   anthropic: "https://api.anthropic.com/v1"
+	//   custom:    must be set explicitly
+	BaseURL string
+
+	// ScoreThreshold is the minimum heuristic score that triggers
+	// LLM judgment. Only scores >= this value get sent to the LLM.
+	// Default: 25 (only uncertain/suspicious inputs get judged)
+	// Set higher (e.g. 40) to only judge near-block cases.
+	// Set to 0 to judge ALL inputs (expensive — not recommended).
+	ScoreThreshold int
+
+	// ScoreMaxForJudge is the maximum heuristic score that triggers
+	// LLM judgment. Scores above this are already clearly attacks
+	// and don't need LLM confirmation.
+	// Default: 75 (clear attacks don't need second opinion)
+	ScoreMaxForJudge int
+
+	// TimeoutSeconds is the HTTP request timeout for LLM calls.
+	// Default: 10 seconds.
+	// Set lower for latency-sensitive applications.
+	TimeoutSeconds int
+
+	// MaxTokens limits the LLM response length.
+	// Default: 150 (we only need a short verdict)
+	MaxTokens int
+
+	// SystemPrompt overrides the default judge system prompt.
+	// Leave empty to use the built-in prompt.
+	// The built-in prompt instructs the LLM to respond with
+	// JSON containing "verdict" and "reasoning" fields.
+	SystemPrompt string
+
+	// ScoreBoostOnAttack is added to the heuristic score when
+	// the LLM judges the input as an attack.
+	// Default: 30
+	ScoreBoostOnAttack int
+
+	// ScorePenaltyOnBenign is subtracted from the heuristic score
+	// when the LLM judges the input as benign.
+	// Default: 15
+	ScorePenaltyOnBenign int
+
+	// IncludeReasoningInResult includes the LLM's reasoning text
+	// in the RiskResult for debugging and audit purposes.
+	// Default: true
+	IncludeReasoningInResult bool
+}
+
+// applyJudgeDefaults applies provider-specific defaults and env fallbacks.
+func applyJudgeDefaults(cfg *JudgeConfig) {
+	if cfg == nil {
+		return
+	}
+
+	if cfg.Model == "" {
+		switch cfg.Provider {
+		case JudgeProviderOllama:
+			cfg.Model = "llama3.2"
+		case JudgeProviderOpenAI:
+			cfg.Model = "gpt-4o-mini"
+		case JudgeProviderAnthropic:
+			cfg.Model = "claude-haiku-4-5-20251001"
+		}
+	}
+
+	if cfg.BaseURL == "" {
+		switch cfg.Provider {
+		case JudgeProviderOllama:
+			cfg.BaseURL = "http://localhost:11434"
+		case JudgeProviderOpenAI:
+			cfg.BaseURL = "https://api.openai.com/v1"
+		case JudgeProviderAnthropic:
+			cfg.BaseURL = "https://api.anthropic.com/v1"
+		}
+	}
+
+	if cfg.ScoreThreshold == 0 && cfg.ScoreMaxForJudge == 0 {
+		cfg.ScoreThreshold = 25
+		cfg.ScoreMaxForJudge = 75
+	} else if cfg.ScoreMaxForJudge == 0 {
+		cfg.ScoreMaxForJudge = 75
+	}
+	if cfg.TimeoutSeconds == 0 {
+		cfg.TimeoutSeconds = 10
+	}
+	if cfg.MaxTokens == 0 {
+		cfg.MaxTokens = 150
+	}
+	if cfg.ScoreBoostOnAttack == 0 {
+		cfg.ScoreBoostOnAttack = 30
+	}
+	if cfg.ScorePenaltyOnBenign == 0 {
+		cfg.ScorePenaltyOnBenign = 15
+	}
+
+	cfg.IncludeReasoningInResult = true
+
+	if cfg.APIKey == "" {
+		switch cfg.Provider {
+		case JudgeProviderOpenAI:
+			cfg.APIKey = os.Getenv("OPENAI_API_KEY")
+		case JudgeProviderAnthropic:
+			cfg.APIKey = os.Getenv("ANTHROPIC_API_KEY")
+		}
+	}
+}
+
+func isZeroJudgeConfig(cfg *JudgeConfig) bool {
+	if cfg == nil {
+		return true
+	}
+
+	return cfg.Provider == "" &&
+		cfg.Model == "" &&
+		cfg.APIKey == "" &&
+		cfg.BaseURL == "" &&
+		cfg.ScoreThreshold == 0 &&
+		cfg.ScoreMaxForJudge == 0 &&
+		cfg.TimeoutSeconds == 0 &&
+		cfg.MaxTokens == 0 &&
+		cfg.SystemPrompt == "" &&
+		cfg.ScoreBoostOnAttack == 0 &&
+		cfg.ScorePenaltyOnBenign == 0 &&
+		!cfg.IncludeReasoningInResult
+}
+
+const defaultMaxCustomScannerScore = 50
+
+var reservedScannerNames = map[string]bool{
+	"secrets":                true,
+	"gibberish":              true,
+	"toxicity":               true,
+	"emotional-manipulation": true,
+	"ban-substring":          true,
+	"ban-topic":              true,
+	"ban-competitor":         true,
+	"custom-regex":           true,
+	"system-prompt-leak":     true,
+	"malicious-url":          true,
+	"pii-leak":               true,
+	"harmful-code":           true,
+	"relevance-drift":        true,
+	"output-gibberish":       true,
 }
 
 // RedactionType identifies what kind of content was redacted.
@@ -271,8 +564,16 @@ func DefaultSanitizeConfig() SanitizeConfig {
 // Shield is the main entry point for idpishield analysis.
 // Safe for concurrent use by multiple goroutines.
 type Shield struct {
-	engine *engine.Engine
+	mu              sync.RWMutex
+	engine          *engine.Engine
+	baseCfg         Config
+	scannerRegistry map[string]Scanner
 }
+
+var (
+	globalScannerRegistryMu sync.RWMutex
+	globalScannerRegistry   = map[string]Scanner{}
+)
 
 // New creates a new Shield with the given configuration.
 // Returns an error if ConfigFile is set and cannot be read or parsed,
@@ -286,6 +587,40 @@ type Shield struct {
 //
 // However, checking the error is strongly recommended in production.
 func New(cfg Config) (*Shield, error) {
+	if err := validateScanners(cfg.ExtraScanners, "ExtraScanners"); err != nil {
+		return nil, err
+	}
+	if err := validateScanners(cfg.ExtraOutputScanners, "ExtraOutputScanners"); err != nil {
+		return nil, err
+	}
+
+	if cfg.Judge != nil {
+		judgeCfg := *cfg.Judge
+		cfg.Judge = &judgeCfg
+
+		if isZeroJudgeConfig(cfg.Judge) {
+			cfg.Judge = nil
+		} else {
+			if strings.TrimSpace(string(cfg.Judge.Provider)) == "" {
+				return nil, fmt.Errorf("JudgeConfig.Provider must be set")
+			}
+
+			switch cfg.Judge.Provider {
+			case JudgeProviderOllama, JudgeProviderOpenAI, JudgeProviderAnthropic, JudgeProviderCustom:
+				// valid provider
+			default:
+				return nil, fmt.Errorf("unknown JudgeConfig.Provider %q", cfg.Judge.Provider)
+			}
+
+			applyJudgeDefaults(cfg.Judge)
+
+			if cfg.Judge.Provider == JudgeProviderCustom && strings.TrimSpace(cfg.Judge.BaseURL) == "" {
+				return nil, fmt.Errorf("JudgeConfig.BaseURL must be set for custom provider")
+			}
+
+		}
+	}
+
 	resolvedCfg, err := engine.ResolveConfig(toEngineCfg(cfg))
 	if err != nil {
 		return nil, err
@@ -295,8 +630,11 @@ func New(cfg Config) (*Shield, error) {
 	}
 
 	eng := engine.New(resolvedCfg)
+	registry := snapshotGlobalScannerRegistry()
 	return &Shield{
-		engine: eng,
+		engine:          eng,
+		baseCfg:         cfg,
+		scannerRegistry: registry,
 	}, nil
 }
 
@@ -452,6 +790,79 @@ func (s *Shield) CheckCanary(response, token string) CanaryResult {
 	return checkCanary(response, token)
 }
 
+// RegisterScanner registers a scanner globally by its Name().
+// Invalid scanners (nil, empty name, reserved names) are ignored.
+func RegisterScanner(scanner Scanner) {
+	name, ok := normalizedScannerName(scanner)
+	if !ok {
+		return
+	}
+
+	globalScannerRegistryMu.Lock()
+	globalScannerRegistry[name] = scanner
+	globalScannerRegistryMu.Unlock()
+}
+
+// RegisterScanner registers a scanner for this Shield instance by Name().
+// Invalid scanners (nil, empty name, reserved names) are ignored.
+func (s *Shield) RegisterScanner(scanner Scanner) {
+	name, ok := normalizedScannerName(scanner)
+	if !ok || s == nil {
+		return
+	}
+
+	s.mu.Lock()
+	if s.scannerRegistry == nil {
+		s.scannerRegistry = map[string]Scanner{}
+	}
+	s.scannerRegistry[name] = scanner
+	s.mu.Unlock()
+}
+
+// WithScanners enables registered scanners by name for this Shield instance.
+// Unknown names are ignored. Built-in scanners always run.
+func (s *Shield) WithScanners(names ...string) *Shield {
+	if s == nil {
+		return s
+	}
+
+	s.mu.RLock()
+	baseCfg := s.baseCfg
+	registry := cloneScannerRegistry(s.scannerRegistry)
+	s.mu.RUnlock()
+
+	selected := make([]Scanner, 0, len(names))
+	for _, name := range names {
+		key := strings.ToLower(strings.TrimSpace(name))
+		if key == "" {
+			continue
+		}
+		scanner, ok := registry[key]
+		if !ok || scanner == nil {
+			continue
+		}
+		selected = append(selected, scanner)
+	}
+
+	baseExtras := append([]Scanner(nil), baseCfg.ExtraScanners...)
+	cfg := baseCfg
+	cfg.ExtraScanners = mergeScannersByName(baseExtras, selected)
+
+	resolvedCfg, err := engine.ResolveConfig(toEngineCfg(cfg))
+	if err != nil {
+		return s
+	}
+	if err := engine.ValidateCustomRegex(resolvedCfg.CustomRegex); err != nil {
+		return s
+	}
+
+	return &Shield{
+		engine:          engine.New(resolvedCfg),
+		baseCfg:         cfg,
+		scannerRegistry: registry,
+	}
+}
+
 // --- Functions ---
 
 // ParseMode converts a string to a Mode value.
@@ -481,7 +892,192 @@ func AssessWithMode(shields map[Mode]*Shield, defaultMode Mode, text, mode strin
 	return engine.AssessWithMode(engines, defaultMode, text, mode)
 }
 
+// ScanHelpers provides utility methods for custom scanner authors.
+type ScanHelpers struct{}
+
+// Helpers returns helper methods for custom scanner implementations.
+func Helpers() ScanHelpers { return ScanHelpers{} }
+
+// ContainsAny reports whether text contains any phrase (case-insensitive).
+func (h ScanHelpers) ContainsAny(text string, phrases []string) bool {
+	lower := strings.ToLower(text)
+	for _, phrase := range phrases {
+		trimmed := strings.ToLower(strings.TrimSpace(phrase))
+		if trimmed == "" {
+			continue
+		}
+		if strings.Contains(lower, trimmed) {
+			return true
+		}
+	}
+	return false
+}
+
+// ContainsAll reports whether text contains all phrases (case-insensitive).
+func (h ScanHelpers) ContainsAll(text string, phrases []string) bool {
+	lower := strings.ToLower(text)
+	for _, phrase := range phrases {
+		trimmed := strings.ToLower(strings.TrimSpace(phrase))
+		if trimmed == "" {
+			continue
+		}
+		if !strings.Contains(lower, trimmed) {
+			return false
+		}
+	}
+	return true
+}
+
+// WordCount returns the number of words in text.
+func (h ScanHelpers) WordCount(text string) int {
+	return len(strings.Fields(text))
+}
+
+// ContainsWholeWord reports whether text contains word as a whole word.
+func (h ScanHelpers) ContainsWholeWord(text string, word string) bool {
+	needle := strings.ToLower(strings.TrimSpace(word))
+	if needle == "" {
+		return false
+	}
+
+	textRunes := []rune(strings.ToLower(text))
+	needleRunes := []rune(needle)
+	needleLen := len(needleRunes)
+	if needleLen == 0 || len(textRunes) < needleLen {
+		return false
+	}
+
+	for i := 0; i <= len(textRunes)-needleLen; i++ {
+		if string(textRunes[i:i+needleLen]) != needle {
+			continue
+		}
+		beforeOK := i == 0 || !isWordRune(textRunes[i-1])
+		afterPos := i + needleLen
+		afterOK := afterPos == len(textRunes) || !isWordRune(textRunes[afterPos])
+		if beforeOK && afterOK {
+			return true
+		}
+	}
+
+	return false
+}
+
+// CountOccurrences counts case-insensitive phrase occurrences.
+func (h ScanHelpers) CountOccurrences(text string, phrase string) int {
+	needle := strings.ToLower(strings.TrimSpace(phrase))
+	if needle == "" {
+		return 0
+	}
+	return strings.Count(strings.ToLower(text), needle)
+}
+
+func isWordRune(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+func validateScanners(scanners []Scanner, fieldName string) error {
+	seen := make(map[string]bool, len(scanners))
+	for i, s := range scanners {
+		if s == nil {
+			return fmt.Errorf("%s[%d] is nil", fieldName, i)
+		}
+		name := strings.TrimSpace(s.Name())
+		if name == "" {
+			return fmt.Errorf("%s[%d].Name() returned empty string", fieldName, i)
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			return fmt.Errorf("%s[%d]: duplicate scanner name %q", fieldName, i, name)
+		}
+		if isReservedScannerName(name) {
+			return fmt.Errorf("%s[%d]: scanner name %q is reserved", fieldName, i, name)
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+func isReservedScannerName(name string) bool {
+	_, ok := reservedScannerNames[strings.ToLower(strings.TrimSpace(name))]
+	return ok
+}
+
+func normalizedScannerName(scanner Scanner) (string, bool) {
+	if scanner == nil {
+		return "", false
+	}
+	name := strings.ToLower(strings.TrimSpace(scanner.Name()))
+	if name == "" || isReservedScannerName(name) {
+		return "", false
+	}
+	return name, true
+}
+
+func snapshotGlobalScannerRegistry() map[string]Scanner {
+	globalScannerRegistryMu.RLock()
+	defer globalScannerRegistryMu.RUnlock()
+
+	if len(globalScannerRegistry) == 0 {
+		return map[string]Scanner{}
+	}
+	out := make(map[string]Scanner, len(globalScannerRegistry))
+	for k, v := range globalScannerRegistry {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneScannerRegistry(in map[string]Scanner) map[string]Scanner {
+	if len(in) == 0 {
+		return map[string]Scanner{}
+	}
+	out := make(map[string]Scanner, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func mergeScannersByName(base []Scanner, extras []Scanner) []Scanner {
+	out := make([]Scanner, 0, len(base)+len(extras))
+	seen := make(map[string]struct{}, len(base)+len(extras))
+
+	for _, scanner := range base {
+		name, ok := normalizedScannerName(scanner)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, scanner)
+	}
+
+	for _, scanner := range extras {
+		name, ok := normalizedScannerName(scanner)
+		if !ok {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		seen[name] = struct{}{}
+		out = append(out, scanner)
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func toEngineCfg(cfg Config) engine.Config {
+	maxCustomScore := cfg.MaxCustomScannerScore
+	if maxCustomScore <= 0 {
+		maxCustomScore = defaultMaxCustomScannerScore
+	}
+
 	return engine.Config{
 		Mode:                           cfg.Mode,
 		AllowedDomains:                 cfg.AllowedDomains,
@@ -503,7 +1099,100 @@ func toEngineCfg(cfg Config) engine.Config {
 		BanCompetitors:                 cfg.BanCompetitors,
 		CustomRegex:                    cfg.CustomRegex,
 		ConfigFile:                     cfg.ConfigFile,
+		ExtraScanners:                  toEngineScanners(cfg.ExtraScanners),
+		ExtraOutputScanners:            toEngineScanners(cfg.ExtraOutputScanners),
+		MaxCustomScannerScore:          maxCustomScore,
+		Judge:                          toEngineJudgeConfig(cfg.Judge),
 	}
+}
+
+func toEngineJudgeConfig(cfg *JudgeConfig) *engine.JudgeConfig {
+	if cfg == nil {
+		return nil
+	}
+
+	return &engine.JudgeConfig{
+		Provider:                 strings.TrimSpace(string(cfg.Provider)),
+		Model:                    strings.TrimSpace(cfg.Model),
+		APIKey:                   strings.TrimSpace(cfg.APIKey),
+		BaseURL:                  strings.TrimSpace(cfg.BaseURL),
+		ScoreThreshold:           cfg.ScoreThreshold,
+		ScoreMaxForJudge:         cfg.ScoreMaxForJudge,
+		TimeoutSeconds:           cfg.TimeoutSeconds,
+		MaxTokens:                cfg.MaxTokens,
+		SystemPrompt:             cfg.SystemPrompt,
+		ScoreBoostOnAttack:       cfg.ScoreBoostOnAttack,
+		ScorePenaltyOnBenign:     cfg.ScorePenaltyOnBenign,
+		IncludeReasoningInResult: cfg.IncludeReasoningInResult,
+	}
+}
+
+type engineScannerAdapter struct {
+	scanner Scanner
+}
+
+func (a *engineScannerAdapter) Name() string {
+	if a == nil || a.scanner == nil {
+		return ""
+	}
+	return a.scanner.Name()
+}
+
+func (a *engineScannerAdapter) Priority() int {
+	if a == nil || a.scanner == nil {
+		return 0
+	}
+	if p, ok := a.scanner.(PriorityScanner); ok {
+		return p.Priority()
+	}
+	return 0
+}
+
+func (a *engineScannerAdapter) Scan(ctx engine.ExternalScanContext) engine.ExternalScanResult {
+	if a == nil || a.scanner == nil {
+		return engine.ExternalScanResult{}
+	}
+
+	publicCtx := ScanContext{
+		Text:         ctx.Text,
+		RawText:      ctx.RawText,
+		URL:          ctx.URL,
+		Mode:         ctx.Mode,
+		IsOutputScan: ctx.IsOutputScan,
+		CurrentScore: ctx.CurrentScore,
+	}
+
+	publicResult := a.scanner.Scan(publicCtx)
+	var metadata map[string]string
+	if len(publicResult.Metadata) > 0 {
+		metadata = make(map[string]string, len(publicResult.Metadata))
+		for k, v := range publicResult.Metadata {
+			metadata[k] = v
+		}
+	}
+
+	return engine.ExternalScanResult{
+		Score:     publicResult.Score,
+		Category:  publicResult.Category,
+		Reason:    publicResult.Reason,
+		Matched:   publicResult.Matched,
+		PatternID: publicResult.PatternID,
+		Metadata:  metadata,
+	}
+}
+
+func toEngineScanners(scanners []Scanner) []engine.ConfigScanner {
+	if len(scanners) == 0 {
+		return nil
+	}
+	out := make([]engine.ConfigScanner, 0, len(scanners))
+	for _, s := range scanners {
+		if s == nil {
+			continue
+		}
+		out = append(out, &engineScannerAdapter{scanner: s})
+	}
+	return out
 }
 
 func toEngineSanitizeConfig(cfg SanitizeConfig) engine.SanitizeConfig {
